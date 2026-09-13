@@ -59,6 +59,24 @@ def build_app(state):
             raise HTTPException(status_code=404, detail="Recorded research event not found")
         return result
 
+    @app.get("/api/lab")
+    async def api_lab():
+        return state.lab_snapshot() if hasattr(state, "lab_snapshot") else {"status":"UNAVAILABLE", "report":None, "shadow":{}}
+
+    @app.get("/api/lab/chart")
+    async def api_lab_chart(variant: str = Query(max_length=40), symbol: str = Query(max_length=20)):
+        result = state.lab_chart(variant, symbol) if hasattr(state, "lab_chart") else None
+        if result is None:
+            raise HTTPException(status_code=404, detail="Unknown experimental variant or symbol")
+        return result
+
+    @app.get("/api/lab/events")
+    async def api_lab_events(trial: str = Query(max_length=60), variant: str = Query(max_length=40)):
+        result = state.lab_events(trial, variant) if hasattr(state, "lab_events") else None
+        if result is None:
+            raise HTTPException(status_code=404, detail="Unknown completed trial or variant")
+        return result
+
     @app.websocket("/ws")
     async def socket(websocket: WebSocket):
         await websocket.accept()

@@ -27,6 +27,7 @@ class Scanner:
             for symbol in settings.symbols
         }
         self.reconnects = 0
+        self._analysis_cache = {}
         root = state_dir or Path("state")
         self.ledger = ZoneLedger(root / "zones.json" if persist else None)
         self.ledger.load()
@@ -36,6 +37,19 @@ class Scanner:
     @staticmethod
     def _touches(zone: Zone, candle) -> bool:
         return candle.low <= zone.upper and candle.high >= zone.lower
+
+    def _context(self, symbol, h4, h1):
+        cached = self._analysis_cache.setdefault(symbol, {})
+        h4_key = tuple(h4)
+        if cached.get('h4') != h4_key:
+            cached['h4'] = h4_key
+            cached['regime'] = regime(h4, self.settings.pivot_left_right)
+        bias, efficiency, pivots = cached['regime']
+        h1_key = (tuple(h1), bias)
+        if cached.get('h1') != h1_key:
+            cached['h1'] = h1_key
+            cached['impulse'] = detect_impulse(h1, bias, self.settings.pivot_left_right)
+        return bias, efficiency, pivots, cached['impulse']
 
     @staticmethod
     def _invalidated(zone: Zone, candle) -> bool:
@@ -136,8 +150,7 @@ class Scanner:
     def evaluate(self, symbol: str) -> None:
         h4, h1, m15, m5 = [self.cache.candles(symbol, tf) for tf in ("4h", "1h", "15m", "5m")]
         self._observe_outcomes(symbol, m5)
-        bias, efficiency, pivots = regime(h4, self.settings.pivot_left_right)
-        impulse = detect_impulse(h1, bias, self.settings.pivot_left_right)
+        bias, efficiency, pivots, impulse = self._context(symbol, h4, h1)
         zone: Zone | None = None
         trigger: dict | None = None
 

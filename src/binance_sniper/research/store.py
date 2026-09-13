@@ -91,8 +91,9 @@ class ResearchStore:
             return None
         signal=json.loads(row['payload'])
         at=signal['decision_time']
-        rows=self.db.execute('SELECT * FROM candles WHERE dataset=? AND symbol=? AND tf=? AND open_time>=? AND close_time<=? ORDER BY open_time LIMIT 60',
-                             (row['dataset'],signal['symbol'],'5m',at+1-50*300000,at+4*300000))
+        horizon=max(1,min(32,int(signal.get('horizon',4))))
+        rows=self.db.execute('SELECT * FROM candles WHERE dataset=? AND symbol=? AND tf=? AND open_time>=? AND close_time<=? ORDER BY open_time LIMIT 82',
+                             (row['dataset'],signal['symbol'],'5m',at+1-50*300000,at+horizon*300000))
         return {'mode':row['mode'],'signal':signal,'outcome':json.loads(row['result']) if row['result'] else None,
                 'bars':[{'open_time':r['open_time'],'close_time':r['close_time'],'open':r['o'],'high':r['h'],'low':r['l'],'close':r['c']} for r in rows],
-                'note':'Hindsight M5: sampai empat candle setelah sinyal. Ini visual hasil, bukan data yang tersedia saat keputusan.'}
+                'horizon':horizon,'note':f'Hindsight M5: sampai {horizon} candle setelah sinyal. Ini visual hasil, bukan data yang tersedia saat keputusan.'}

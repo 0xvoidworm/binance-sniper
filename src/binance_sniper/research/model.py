@@ -78,7 +78,7 @@ def outcome(signal: dict, bars: list[Candle], costs: Costs = Costs(), funding: l
         if not started <= at <= exit_at:
             continue
         amount = side * float(event['rate']) * float(event['mark']) / risk
-        uncertain = at == started or (reason not in {'FOUR_BAR_CLOSE', 'STOP_GAP', 'TARGET_GAP'} and at >= used[-1].open_time)
+        uncertain = at in {started, exit_at} or (reason not in {'FOUR_BAR_CLOSE', 'STOP_GAP', 'TARGET_GAP'} and at >= used[-1].open_time)
         uncertain_funding = uncertain_funding or uncertain
         funding_cost += max(0.0, amount) if uncertain else amount
     after_costs = gross - fees

@@ -2,6 +2,7 @@ import json
 
 from binance_sniper.research.report import metrics
 from binance_sniper.research.store import ResearchStore
+from binance_sniper.domain import Candle
 from test_research_model import signal
 
 
@@ -29,3 +30,17 @@ def test_empty_metrics_never_imply_profit():
     assert metrics([])['mean_r'] is None
     assert metrics([])['win_rate'] is None
     assert metrics([])['sample_warning']=='NO_SAMPLES'
+
+
+def test_eight_bar_event_evidence_has_actual_horizon(tmp_path):
+    store=ResearchStore(tmp_path/'research.sqlite3')
+    store.run('r','d','LAB','hash',{})
+    s={**signal(),'decision_time':50*300000-1,'horizon':8}
+    store.signal('r',s)
+    store.put_bars('d',[Candle('BTCUSDT','5m',i*300000,(i+1)*300000-1,100,106,94,105,1,True) for i in range(65)])
+    evidence=store.event_view('r','a')
+    assert evidence['horizon']==8
+    assert len(evidence['bars'])==58
+    assert evidence['bars'][-1]['close_time']==58*300000-1
+    assert '8 candle' in evidence['note']
+    store.close()

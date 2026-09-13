@@ -1,0 +1,2 @@
+# Keep the registered protocol's byte fingerprint stable across Windows checkouts.
+docs/PHASE3_PROTOCOL.md text eol=lf

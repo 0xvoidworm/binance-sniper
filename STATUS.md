@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-09-13
+Updated: 2026-09-14 WIB
 
 - [x] GET-only private client with credential redaction and exact official-host pinning
 - [x] Six-symbol, four-timeframe production REST warmup and per-feed fallback scheduler
@@ -18,7 +18,10 @@ Updated: 2026-09-13
 - [x] Synthetic step/play replay through six causal frames with isolated account display
 - [x] Phase 2 immutable decision/signal journal, public-data historical event study, cost model, and terminal evidence panel
 - [x] 90-day causal baseline with a fixed 60/30 chronological split; 27 signals, negative modeled net means in both partitions
-- [ ] Demonstrated strategy edge, independent walk-forward, and profitability validation
+- [x] Phase 3 preregistered eight-variant strategy lab with causal shared historical/live pattern engine
+- [x] New 360-day dataset, three training-selected walk-forward folds, final 60-day holdout, cost stress, and clustered uncertainty
+- [x] Historical area evidence, explicit 4/8-bar horizons, and separate restart-persisted experimental live observation
+- [ ] Demonstrated strategy edge or future/live profitability: all eight alternatives remain negative; NO_PROMOTION
 - [ ] Trading execution (intentionally absent)
 
-Latest offline verification: `63 passed` Python tests plus `8 passed` JavaScript model tests, one third-party Starlette/AnyIO deprecation warning, and clean `pip check`. Research task added; latest service check: 28/28 RUNNING, 24/24 fallback feeds, no positions/orders. See `TEST_RESULTS.md`.
+Latest verification: Python `80 passed`, JavaScript `10 passed`, one third-party Starlette/AnyIO deprecation warning, clean `pip check`. Latest service owner: PID 25112, 29/29 tasks RUNNING, 24/24 fallback feeds, no positions/orders. Phase 3 result: `lab-e98337744f4aefe8ba8625fc`; selected candidate `SWEEP_T1_4`, 76 holdout events with -0.227142R mean net. The implementation is more testable and observable; a profitable trading engine has NOT been established. See `TEST_RESULTS.md` and `docs/PHASE3_RESULTS.md`.

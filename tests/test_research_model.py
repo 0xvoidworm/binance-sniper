@@ -91,3 +91,25 @@ def test_temporal_partition_purges_and_embargoes_full_horizon():
 def test_cost_validation():
     with pytest.raises(ValueError):
         Costs(float('nan'))
+
+
+def test_funding_at_gap_exit_does_not_invent_uncertain_credit():
+    b=bars('BEARISH')
+    b[1]=Candle('BTCUSDT','5m',600000,899999,120,121,119,120,1,True)
+    result=outcome(signal('BEARISH'),b,Costs(0,0),[{'at':600000,'rate':.001,'mark':120}])
+    assert result['exit_reason']=='STOP_GAP'
+    assert result['funding_timing_ambiguous']
+    assert result['funding_r']==0
+
+
+def test_eight_bar_ablation_uses_eighth_close_and_ignores_later_bars():
+    b=bars()
+    b.extend(Candle('BTCUSDT','5m',(i+1)*300000,(i+2)*300000-1,100,108,94,107,1,True) for i in range(4,8))
+    result=outcome(signal(),b,Costs(0,0,8),[])
+    assert result['bars']==8
+    assert result['costs']['horizon']==8
+    assert result['exit_time']==2699999
+    assert result['net_r']==pytest.approx(.7)
+    assert outcome(signal(),b[:7],Costs(0,0,8),[])['status']=='PENDING'
+    b.append(Candle('BTCUSDT','5m',2700000,2999999,100,200,1,150,1,True))
+    assert outcome(signal(),b,Costs(0,0,8),[])==result

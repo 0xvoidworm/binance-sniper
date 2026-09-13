@@ -16,6 +16,7 @@ from binance_sniper.market.mtf_cache import MtfCache
 from binance_sniper.secrets import load_credentials
 from binance_sniper.web import build_app
 from binance_sniper.research.recorder import ResearchRecorder
+from binance_sniper.strategy_lab.live import ShadowLab
 
 
 TaskFactory = Callable[[], Awaitable[None]]
@@ -52,6 +53,7 @@ class Runtime:
         self.pid_file = self.state_dir / "binance-sniper.pid"
         self.lock_file = self.state_dir / "binance-sniper.lock"
         self.research = None
+        self.lab = None
 
     def server_now(self) -> int:
         return int(time.time() * 1000) + self.server_offset_ms
@@ -302,6 +304,32 @@ class Runtime:
     def research_event(self, run_id: str, candidate_id: str):
         return self.research.store.event_view(run_id, candidate_id) if self.research is not None else None
 
+    async def lab_loop(self) -> None:
+        try:
+            self.lab = ShadowLab(self.state_dir / "research.sqlite3", self.settings, self.server_now())
+            while not self.stopping:
+                self.lab.capture(self, self.server_now())
+                self._heartbeat("strategy-lab")
+                await asyncio.sleep(5)
+        finally:
+            if self.lab is not None:
+                self.lab.close()
+                self.lab = None
+
+    def lab_snapshot(self) -> dict:
+        result = dict(self.lab.snapshot) if self.lab is not None else {"status":"STARTING", "report":None, "shadow":{}}
+        health = self.task_health().get("strategy-lab", {})
+        result["task"] = health
+        if health.get("status") not in {None,"RUNNING"}:
+            result["status"] = health["status"]
+        return result
+
+    def lab_chart(self, variant: str, symbol: str):
+        return self.lab.chart(variant, symbol) if self.lab is not None else None
+
+    def lab_events(self, trial: str, variant: str):
+        return self.lab.events(trial, variant) if self.lab is not None else None
+
     @staticmethod
     def _pid_alive(pid: int) -> bool:
         if pid <= 0:
@@ -336,6 +364,7 @@ class Runtime:
             self._spawn("account", self.account_refresh_loop)
             self._spawn("server-time", self.server_time_loop)
             self._spawn("research", self.research_loop)
+            self._spawn("strategy-lab", self.lab_loop)
             for symbol in self.settings.symbols:
                 for timeframe in self.settings.timeframes:
                     self._spawn(f"rest:{symbol}:{timeframe}", lambda s=symbol, tf=timeframe: self.rest_feed_loop(s, tf))

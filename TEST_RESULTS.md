@@ -1,8 +1,24 @@
 # Test Results
 
-Updated: 2026-09-13
+Updated: 2026-09-14 WIB
 
-## Latest: Phase 2
+## Latest: Phase 3
+
+- Python: **80 passed**, one existing Starlette/AnyIO dependency deprecation warning. JavaScript: **10 passed** (eight terminal-model tests plus two new panel-cache regression tests). Syntax checks for `lab-panel.js`, `research-panel.js`, `terminal.js`, Python compile, and `pip check` pass. No new dependency was installed.
+- Added tests cover mirrored long/short retracement geometry and valid stop/target direction; wrong-direction trigger rejection; context reversal/gap cancellation; future higher-timeframe rejection; explicit cost/room gates; prior-range sweep evidence; H4 neutral/opposition and revision-sensitive context; training selection unchanged by future extreme outcomes; uniform purge/embargo; no false promotion; experimental warmup isolation; signal/state persistence and restart deduplication; GET-only Lab routes, bounded inputs/404s/assets; and config provenance.
+- Numeric eight-bar ablation test proves completion uses the eighth close, seven bars remain pending, and a ninth bar cannot alter the completed result. Recorded event-window test verifies 50 + 8 = **58 M5 candles**. Exact gap-exit funding boundary test verifies no uncertain credit is invented.
+- Public dataset: **899,520 candles**, 24/24 complete feeds, **6,480 funding records**, 622,080 closed-M5 decision times across six pairs. Trial **lab-e98337744f4aefe8ba8625fc**: eight variants, three expanding train-selected folds, final 60-day holdout. Selected `SWEEP_T1_4`, holdout **76 / -0.227142R net**, stress **-0.402329R**; matched baseline **25 / -0.563761R**. All three folds and all eight full-period variant means are negative: **NO_PROMOTION**.
+- Prior trial `lab-6b33792f035df1f24d6cbbac` is retained. Direct report comparison verifies equal validation, baseline, and variant results except run IDs after adding config fingerprint provenance. These are not independent samples. Current strategy/config/protocol source fingerprints match the final stored report.
+- Browser integration in a separate debugging context: Lab API and assets load; HASIL UJI / OBSERVASI BARU switch correctly; actual historical eight-bar evidence opens with stored amber area, entry/stop/target, 58 candles, explicit hindsight shading and `TIME STOP / 8 M5`; the new live chart uses actual archived M5 bars without fabricating an area. Expanded results survived subsequent live refreshes. Main chart is explicitly labelled as baseline in the Lab panel. No console errors/warnings during normal checks.
+- Final integration review found Research's cached-render guard also matched the new Lab toolbar. A unique `phase2-toolbar` marker fixes stale cross-tab content. Two dependency-free DOM-fixture tests and repeated actual browser Research → Lab → Research switching verify the fix.
+- Desktop 1440px and mobile 390px screenshots inspected inline. Mobile document/body width both **390px**; wide comparison tables scroll inside the panel (not the page). No screenshot file is claimed.
+- Service restarted through verified project PID/port ownership; new owner **25112**. **29/29 tasks RUNNING**, **24/24 LIVE_REST_FALLBACK**, max lag **0**, `strategy-lab` and `research` restarts **0** at check. Account **CONNECTED** with positions/regular/conditional/execution-algo/total orders **0/0/0/0/0**. Binance WS still reports its real silent/reconnecting state.
+- New experimental namespace `shadow-abb5544cdf1afa3c84942894` started **2026-09-13 17:16 UTC**. The first new M5 close ending 17:19:59.999 UTC advanced **48 variant/pair states**: 8 H1_NEUTRAL, 30 WAIT_IMPULSE, 10 WAIT_SWEEP; no signals or pending outcomes at that check. Historical warmup was not relabelled as new observations. This is one observed closed-bar transition plus deterministic restart tests, not a multi-day live soak.
+- The Sites workflow preserved the existing local terminal structure/assets and local SQLite storage; nothing was hosted or migrated. No exchange mutation capability was added; IP-restriction policy, credentials, leverage, margin, orders, and positions were not modified.
+
+Findings and interpretation: [PHASE3_RESULTS.md](docs/PHASE3_RESULTS.md). The remainder preserves earlier-phase evidence; do not add its counts as new independent validation.
+
+## Previous: Phase 2
 
 - Python: **63 passed**, one existing Starlette/AnyIO dependency deprecation warning. JavaScript model: **8 passed**. Research/terminal JS syntax, Python compile, and `pip check` pass.
 - New tests cover next-open rather than signal-close fills; long/short fee/slippage; missing funding; conservative funding timing; stop/target ambiguity; gap stop; invalidated entry; incomplete/gapped horizons; preview/future exclusion; purge/embargo; empty metrics; immutable completed outcomes; SQLite restart/dedupe; live/historical separation; recorded event-window bounds; GET-only research routes; and warmup anti-backdating.
