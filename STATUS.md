@@ -15,4 +15,4 @@ Updated: 2026-09-13
 
 No order, cancel, leverage, margin, position-mode, or API-setting mutation is implemented.
 
-Latest verification: offline tests 8 passed; production live smoke 24/24 feeds LIVE, account read-only CONNECTED, 0 positions/orders, dashboard candlesticks visible.
+Latest verification: offline tests 18 passed with 5 framework deprecation warnings; `pip check` clean. Production smoke reports WS silent honestly and 24/24 `LIVE_REST_FALLBACK`; account read-only CONNECTED with regular/algo/total orders 0; dashboard candlesticks visible.

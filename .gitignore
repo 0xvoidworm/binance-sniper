@@ -5,5 +5,6 @@ __pycache__/
 .pytest_cache/
 .coverage
 logs/
+state/
 *.log
 credentials.dpapi

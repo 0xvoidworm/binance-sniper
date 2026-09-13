@@ -5,6 +5,7 @@ import hmac
 import time
 from urllib.parse import urlencode
 import httpx
+from urllib.parse import urlparse
 
 
 class ReadOnlyApiError(RuntimeError):
@@ -12,10 +13,18 @@ class ReadOnlyApiError(RuntimeError):
 
 
 class PrivateReadOnlyClient:
-    ALLOWED_GET = frozenset({"/fapi/v2/account", "/fapi/v2/positionRisk", "/fapi/v1/openOrders", "/fapi/v1/apiTradingStatus", "/sapi/v1/account/apiRestrictions", "/fapi/v1/time"})
+    ALLOWED_GET = frozenset({"/fapi/v2/account", "/fapi/v2/positionRisk", "/fapi/v1/openOrders", "/fapi/v1/positionSide/dual", "/fapi/v1/multiAssetsMargin", "/fapi/v1/exchangeInfo", "/sapi/v1/algo/futures/openOrders", "/fapi/v1/apiTradingStatus", "/sapi/v1/account/apiRestrictions", "/fapi/v1/time"})
     MUTATING = frozenset({"POST", "PUT", "DELETE", "PATCH"})
+    FUTURES_HOST = "fapi.binance.com"
+    ACCOUNT_HOST = "api.binance.com"
 
     def __init__(self, base_url: str, api_key: str, secret: str, account_base_url: str = "https://api.binance.com"):
+        if base_url != "https://fapi.binance.com" or account_base_url != "https://api.binance.com":
+            raise ReadOnlyApiError("OFFICIAL_BINANCE_HOST_REQUIRED")
+        for value, host in ((base_url, self.FUTURES_HOST), (account_base_url, self.ACCOUNT_HOST)):
+            parsed = urlparse(value)
+            if parsed.scheme != "https" or parsed.hostname != host or parsed.username or parsed.password or parsed.port:
+                raise ReadOnlyApiError("OFFICIAL_BINANCE_HOST_REQUIRED")
         self._api_key, self._secret = api_key, secret
         self.client = httpx.AsyncClient(base_url=base_url, timeout=20.0, follow_redirects=False, headers={"X-MBX-APIKEY": api_key, "User-Agent": "BinanceSniper/0.1-readonly"})
         self.account_client = httpx.AsyncClient(base_url=account_base_url, timeout=20.0, follow_redirects=False, headers={"X-MBX-APIKEY": api_key, "User-Agent": "BinanceSniper/0.1-readonly"})
@@ -43,5 +52,9 @@ class PrivateReadOnlyClient:
         restrictions = await self._get("/sapi/v1/account/apiRestrictions")
         account = await self._get("/fapi/v2/account")
         positions = await self._get("/fapi/v2/positionRisk")
-        orders = await self._get("/fapi/v1/openOrders", {"symbol": "BTCUSDT"})
-        return {"auth": "CONNECTED", "ip_restrict": restrictions.get("ipRestrict"), "futures_enabled": restrictions.get("enableFutures"), "account_locked": account.get("canTrade") is False, "position_mode": "HEDGE" if account.get("dualSidePosition") else "ONE_WAY", "multi_assets": account.get("multiAssetsMargin"), "positions": sum(1 for x in positions if abs(float(x.get("positionAmt", 0))) > 0), "orders": len(orders), "available_balance": float(account.get("availableBalance", 0)), "warning": "API IP restriction disabled (accepted operator policy)" if restrictions.get("ipRestrict") is False else None}
+        dual_side = await self._get("/fapi/v1/positionSide/dual")
+        multi_assets = await self._get("/fapi/v1/multiAssetsMargin")
+        regular_orders = await self._get("/fapi/v1/openOrders")
+        algo_payload = await self._get("/sapi/v1/algo/futures/openOrders")
+        algo_orders = algo_payload.get("orders", []) if isinstance(algo_payload, dict) else algo_payload
+        return {"auth": "CONNECTED", "ip_restrict": restrictions.get("ipRestrict"), "futures_enabled": restrictions.get("enableFutures"), "account_locked": account.get("canTrade") is False, "position_mode": "HEDGE" if dual_side.get("dualSidePosition") else "ONE_WAY", "multi_assets": multi_assets.get("multiAssetsMargin"), "positions": sum(1 for x in positions if abs(float(x.get("positionAmt", 0))) > 0), "regular_orders": len(regular_orders), "algo_orders": len(algo_orders), "total_orders": len(regular_orders) + len(algo_orders), "orders": len(regular_orders) + len(algo_orders), "available_balance": float(account.get("availableBalance", 0)), "warning": "API IP restriction disabled (accepted operator policy)" if restrictions.get("ipRestrict") is False else None, "snapshot_at": int(time.time() * 1000)}

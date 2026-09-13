@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+import os
 from pathlib import Path
 
 from binance_sniper.binance.market_stream import MarketStream
@@ -24,17 +26,26 @@ class Runtime:
         self.public = BinancePublicRest(settings.rest_base)
         self.stream = MarketStream(settings.websocket_base, settings.symbols, settings.timeframes, self.handle_stream, settings.reconnect_max_seconds)
         self.tasks: list[asyncio.Task] = []
+        self.last_ws_payload = 0
+        self.last_broadcast = 0.0
+        self.broadcast_pending = False
+        self.transport_state = "STARTING"
+        self.pid_file = Path("state") / "binance-sniper.pid"
+        self.lock_file = Path("state") / "binance-sniper.lock"
 
     async def warmup(self) -> None:
-        await self.public.server_time()
+        server_now = await self.public.server_time()
         async def one(symbol, timeframe):
             rows = await self.public.klines(symbol, timeframe, self.settings.warmup_limit)
-            self.cache.warmup(symbol, timeframe, rows)
+            self.cache.warmup(symbol, timeframe, rows, server_now)
         await asyncio.gather(*(one(symbol, tf) for symbol in self.settings.symbols for tf in self.settings.timeframes))
         self.scanner.evaluate_all()
+        self.transport_state = "REST_WARM"
 
     async def handle_stream(self, event: dict) -> None:
         if event.get("type") == "kline":
+            self.last_ws_payload = int(event.get("received_ms", int(time.time() * 1000)))
+            self.transport_state = "LIVE_WS"
             accepted = self.cache.update(event["payload"])
             if accepted:
                 data = event["payload"].get("data", {})
@@ -43,9 +54,18 @@ class Runtime:
                     self.scanner.evaluate(symbol)
         elif event.get("type") == "reconnecting":
             self.scanner.reconnects = event.get("reconnects", self.scanner.reconnects)
+            self.transport_state = "RECONNECTING"
+        elif event.get("type") == "malformed":
+            self.transport_state = "WS_SILENT"
         await self.broadcast()
 
     async def broadcast(self):
+        now = time.monotonic()
+        if now - self.last_broadcast < 0.25:
+            self.broadcast_pending = True
+            return
+        self.last_broadcast = now
+        self.broadcast_pending = False
         message = self.snapshot()
         dead = set()
         for client in self.clients:
@@ -55,8 +75,27 @@ class Runtime:
                 dead.add(client)
         self.clients.difference_update(dead)
 
+    async def rest_fallback_loop(self):
+        while True:
+            await asyncio.sleep(self.settings.rest_poll_seconds)
+            now = int(time.time() * 1000)
+            silent = self.last_ws_payload == 0 or now - self.last_ws_payload > self.settings.ws_silent_seconds * 1000
+            if silent:
+                self.transport_state = "WS_SILENT"
+                self.cache.mark_all_ws_silent()
+                self.cache.mark_all_fallback()
+                for symbol in self.settings.symbols:
+                    for timeframe in self.settings.timeframes:
+                        rows = await self.public.klines(symbol, timeframe, min(self.settings.warmup_limit, 80))
+                        if self.cache.update_rest(symbol, timeframe, rows, now):
+                            self.scanner.evaluate(symbol)
+                await self.broadcast()
+
     def snapshot(self) -> dict:
-        return self.scanner.snapshot()
+        snapshot = self.scanner.snapshot()
+        snapshot["transport_state"] = self.transport_state
+        snapshot["last_ws_payload"] = self.last_ws_payload
+        return snapshot
 
     async def load_account(self) -> None:
         try:
@@ -70,15 +109,36 @@ class Runtime:
             logging.getLogger(__name__).warning("account panel unavailable: %s", type(exc).__name__)
             self.account = {"auth": "AUTH_UNAVAILABLE", "note": "Private read-only panel unavailable; public scanner continues."}
 
+    async def account_refresh_loop(self):
+        while True:
+            await asyncio.sleep(30)
+            await self.load_account()
+            await self.broadcast()
+
     async def start(self):
+        self.pid_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(self.lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+                handle.write(str(os.getpid()))
+        except FileExistsError:
+            raise RuntimeError("BINANCE_SNIPER_INSTANCE_ALREADY_RUNNING") from None
+        self.pid_file.write_text(str(os.getpid()), encoding="ascii")
         await self.warmup()
-        self.tasks = [asyncio.create_task(self.stream.run()), asyncio.create_task(self.load_account())]
+        self.tasks = [asyncio.create_task(self.stream.run()), asyncio.create_task(self.load_account()), asyncio.create_task(self.rest_fallback_loop()), asyncio.create_task(self.account_refresh_loop())]
 
     async def stop(self):
         await self.stream.stop()
         for task in self.tasks:
             task.cancel()
+        await asyncio.gather(*self.tasks, return_exceptions=True)
         await self.public.close()
+        for path in (self.pid_file, self.lock_file):
+            try:
+                if path.exists() and path.read_text(encoding="ascii").strip() == str(os.getpid()):
+                    path.unlink()
+            except OSError:
+                pass
 
 
 settings = Settings.load(Path(__file__).resolve().parents[2] / "config" / "settings.yaml")

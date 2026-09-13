@@ -12,9 +12,11 @@ def detect(candles: list[Candle], direction: str, radius: int = 2) -> dict | Non
         return None
     origin = relevant[-1]
     end = candles[-1]
-    size = abs(end.close - origin[2])
+    signed_size = end.close - origin[2] if direction == "BULLISH" else origin[2] - end.close
+    size = signed_size
     rng = max(end.high - end.low, 1e-12)
     quality = abs(end.close - end.open) / rng
-    if size <= 0 or quality < .4:
+    structure_ok = end.close > origin[2] if direction == "BULLISH" else end.close < origin[2]
+    if size <= 0 or quality < .4 or not structure_ok:
         return None
     return {"id": f"{candles[0].symbol}:{origin[3]}", "origin": origin[2], "end": end.close, "quality": quality, "confirmed_at": origin[3]}

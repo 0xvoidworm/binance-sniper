@@ -24,6 +24,8 @@ class Settings:
     trigger_min_body_fraction: float
     four_bar_horizon: int
     credentials_path: Path
+    ws_silent_seconds: int = 15
+    rest_poll_seconds: int = 5
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
