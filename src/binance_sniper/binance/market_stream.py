@@ -8,10 +8,11 @@ import websockets
 
 
 class MarketStream:
-    def __init__(self, base_url: str, symbols: tuple[str, ...], timeframes: tuple[str, ...], on_event, max_backoff: int = 60):
+    def __init__(self, base_url: str, symbols: tuple[str, ...], timeframes: tuple[str, ...], on_event, max_backoff: int = 60, silent_seconds: int = 15):
         self.base_url, self.symbols, self.timeframes, self.on_event, self.max_backoff = base_url, symbols, timeframes, on_event, max_backoff
         self.stop_event = asyncio.Event()
         self.reconnects = 0
+        self.silent_seconds = silent_seconds
 
     def stream_url(self) -> str:
         streams = "/".join(f"{symbol.lower()}@kline_{tf}" for symbol in self.symbols for tf in self.timeframes)
@@ -24,7 +25,13 @@ class MarketStream:
                 async with websockets.connect(self.stream_url(), ping_interval=20, ping_timeout=20, close_timeout=5) as socket:
                     backoff = 1
                     await self.on_event({"type": "connected", "reconnects": self.reconnects})
-                    async for raw in socket:
+                    while not self.stop_event.is_set():
+                        try:
+                            raw = await asyncio.wait_for(socket.recv(), timeout=self.silent_seconds)
+                        except asyncio.TimeoutError:
+                            await self.on_event({"type": "ws_silent", "reconnects": self.reconnects})
+                            await socket.close(code=1000, reason="silent watchdog")
+                            break
                         if self.stop_event.is_set():
                             break
                         try:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+import math
 
 from binance_sniper.domain import Candle
 
@@ -21,6 +22,10 @@ class Quality:
     gaps: int = 0
     rest_reconciles: int = 0
     transport: str = "STARTING"
+    last_attempt_at: int = 0
+    last_success_at: int = 0
+    last_error_class: str | None = None
+    reconnect_count: int = 0
 
 
 INTERVAL_MS = {"5m": 300_000, "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000}
@@ -34,11 +39,32 @@ class ClosedBarCache:
         self._last_open = -1
         self.preview: Candle | None = None
 
-    def _from_rest(self, row: list) -> Candle:
-        return Candle(self.symbol, self.timeframe, int(row[0]), int(row[6]), float(row[1]), float(row[2]), float(row[3]), float(row[4]), float(row[5]), True)
+    def _parse(self, values: list | dict, closed: bool) -> Candle | None:
+        try:
+            if isinstance(values, dict):
+                open_time, close_time = int(values["t"]), int(values["T"])
+                open_, high, low, close, volume = (float(values[key]) for key in ("o", "h", "l", "c", "v"))
+            else:
+                if len(values) < 7:
+                    return None
+                open_time, close_time = int(values[0]), int(values[6])
+                open_, high, low, close, volume = (float(values[index]) for index in (1, 2, 3, 4, 5))
+            interval = INTERVAL_MS[self.timeframe]
+            valid = all(math.isfinite(value) for value in (open_, high, low, close, volume))
+            valid = valid and open_ > 0 and min(high, low, close, volume) >= 0
+            valid = valid and high >= max(open_, close) and low <= min(open_, close) and high >= low
+            valid = valid and close_time > open_time and open_time % interval == 0
+            if not valid:
+                return None
+            return Candle(self.symbol, self.timeframe, open_time, close_time, open_, high, low, close, volume, closed)
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return None
 
-    def warmup(self, rows: list[list]) -> None:
-        parsed = [self._from_rest(row) for row in rows if len(row) >= 7]
+    def _from_rest(self, row: list) -> Candle | None:
+        return self._parse(row, True)
+
+    def warmup(self, rows: list[list], now: int | None = None) -> None:
+        parsed = [candle for row in rows if (candle := self._from_rest(row)) is not None]
         parsed.sort(key=lambda x: x.open_time)
     def warmup(self, rows: list[list], now: int | None = None) -> None:
         parsed = [self._from_rest(row) for row in rows if len(row) >= 7]
@@ -51,6 +77,8 @@ class ClosedBarCache:
                 self.preview = candle
         self.quality.status = "REST_WARM" if self.items else "STALE"
         self.quality.transport = "REST_WARM"
+        if now is not None and self.items:
+            self.quality.last_success_at = now
 
     def update_ws(self, event: dict) -> bool:
         now = int(event.get("received_ms", 0))
@@ -60,15 +88,14 @@ class ClosedBarCache:
         if not kline or kline.get("s") != self.symbol or kline.get("i") != self.timeframe:
             self.quality.malformed += 1
             return False
-        try:
-            candle = Candle(self.symbol, self.timeframe, int(kline["t"]), int(kline["T"]), float(kline["o"]), float(kline["h"]), float(kline["l"]), float(kline["c"]), float(kline["v"]), bool(kline["x"]))
-        except (KeyError, TypeError, ValueError):
-            self.quality.malformed += 1
-            return False
-        if candle.high < max(candle.open, candle.close) or candle.low > min(candle.open, candle.close) or candle.low <= 0:
+        candle = self._parse(kline, bool(kline.get("x")))
+        if candle is None:
             self.quality.malformed += 1
             return False
         self.quality.last_valid_payload_at = now
+        self.quality.last_success_at = now
+        self.quality.status = "LIVE_WS"
+        self.quality.transport = "LIVE_WS"
         if not candle.closed:
             self.preview = candle
             self.quality.last_preview_at = now
@@ -77,16 +104,20 @@ class ClosedBarCache:
 
     def update_rest(self, rows: list[list], now: int) -> bool:
         changed = False
-        parsed = [self._from_rest(row) for row in rows if len(row) >= 7]
+        self.quality.last_attempt_at = now
+        parsed = [candle for row in rows if (candle := self._from_rest(row)) is not None]
         for candle in sorted(parsed, key=lambda x: x.open_time):
             if candle.close_time <= now:
-                changed = self._accept(candle, source="REST") or changed
+                if candle.open_time > self._last_open:
+                    changed = self._accept(candle, source="REST") or changed
             else:
                 self.preview = candle
+                self.quality.last_preview_at = now
         if changed:
             self.quality.rest_updates += 1
             self.quality.rest_reconciles += 1
             self.quality.last_valid_payload_at = now
+            self.quality.last_success_at = now
         return changed
 
     def mark_ws_silent(self) -> None:
@@ -96,6 +127,12 @@ class ClosedBarCache:
     def mark_fallback(self) -> None:
         self.quality.status = "LIVE_REST_FALLBACK"
         self.quality.transport = "LIVE_REST_FALLBACK"
+
+    def mark_error(self, error_class: str, now: int) -> None:
+        self.quality.last_attempt_at = now
+        self.quality.last_error_class = error_class
+        if self.quality.last_success_at == 0:
+            self.mark_stale()
 
     def mark_ws_live(self) -> None:
         self.quality.status = "LIVE_WS"
@@ -129,3 +166,9 @@ class ClosedBarCache:
 
     def preview_value(self) -> Candle | None:
         return self.preview
+
+    def audit(self, now: int) -> dict:
+        last = self.quality.last_closed
+        interval = INTERVAL_MS[self.timeframe]
+        return {**vars(self.quality), "age_ms": max(0, now - last) if last else None,
+                "lag_bars": max(0, (now - last) // interval - 1) if last else None}

@@ -19,4 +19,6 @@ def detect(candles: list[Candle], direction: str, radius: int = 2) -> dict | Non
     structure_ok = end.close > origin[2] if direction == "BULLISH" else end.close < origin[2]
     if size <= 0 or quality < .4 or not structure_ok:
         return None
-    return {"id": f"{candles[0].symbol}:{origin[3]}", "origin": origin[2], "end": end.close, "quality": quality, "confirmed_at": origin[3]}
+        return {"id": f"{candles[0].symbol}:{direction}:{origin[3]}:{end.close_time}", "origin": origin[2], "end": end.close,
+            "start_time": candles[origin[1]].open_time, "end_time": end.close_time,
+            "quality": quality, "confirmed_at": origin[3]}

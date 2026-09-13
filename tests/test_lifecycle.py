@@ -20,5 +20,5 @@ def test_zone_identity_persists_and_transition_dedupes(tmp_path):
 def test_four_bar_tracker_completes():
     tracker=FourBarTracker(); tracker.start('c',100,90,120,0)
     for i in range(1,5): tracker.observe('c',candle(i,105,110,95),4)
-    assert tracker.active['c']['status']=='COMPLETED'
-    assert tracker.active['c']['mfe'] > 0
+    assert tracker.completed['c']['status']=='COMPLETED'
+    assert tracker.completed['c']['mfe'] > 0

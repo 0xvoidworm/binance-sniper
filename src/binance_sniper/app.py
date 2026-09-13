@@ -23,12 +23,15 @@ class Runtime:
         self.scanner = Scanner(self.cache, settings)
         self.clients: set = set()
         self.account = {"auth": "AUTH_UNAVAILABLE", "note": "Private read-only panel unavailable; public scanner may continue."}
+        self.account_success_at = 0
+        self.account_error_class = None
         self.public = BinancePublicRest(settings.rest_base)
-        self.stream = MarketStream(settings.websocket_base, settings.symbols, settings.timeframes, self.handle_stream, settings.reconnect_max_seconds)
+        self.stream = MarketStream(settings.websocket_base, settings.symbols, settings.timeframes, self.handle_stream, settings.reconnect_max_seconds, settings.ws_silent_seconds)
         self.tasks: list[asyncio.Task] = []
         self.last_ws_payload = 0
         self.last_broadcast = 0.0
         self.broadcast_pending = False
+        self.broadcast_task: asyncio.Task | None = None
         self.transport_state = "STARTING"
         self.pid_file = Path("state") / "binance-sniper.pid"
         self.lock_file = Path("state") / "binance-sniper.lock"
@@ -44,11 +47,14 @@ class Runtime:
 
     async def handle_stream(self, event: dict) -> None:
         if event.get("type") == "kline":
-            self.last_ws_payload = int(event.get("received_ms", int(time.time() * 1000)))
-            self.transport_state = "LIVE_WS"
+            received = int(event.get("received_ms", int(time.time() * 1000)))
             accepted = self.cache.update(event["payload"])
+            data = event["payload"].get("data", {})
+            feed = self.cache.caches.get((data.get("s"), data.get("k", {}).get("i")))
+            if feed and feed.quality.transport == "LIVE_WS":
+                self.last_ws_payload = received
+                self.transport_state = "LIVE_WS"
             if accepted:
-                data = event["payload"].get("data", {})
                 symbol = data.get("s")
                 if symbol:
                     self.scanner.evaluate(symbol)
@@ -57,12 +63,18 @@ class Runtime:
             self.transport_state = "RECONNECTING"
         elif event.get("type") == "malformed":
             self.transport_state = "WS_SILENT"
+        elif event.get("type") == "ws_silent":
+            self.transport_state = "WS_SILENT"
+            self.cache.mark_all_ws_silent()
         await self.broadcast()
 
     async def broadcast(self):
         now = time.monotonic()
         if now - self.last_broadcast < 0.25:
             self.broadcast_pending = True
+            task = getattr(self, "broadcast_task", None)
+            if task is None or task.done():
+                self.broadcast_task = asyncio.create_task(self._delayed_broadcast(0.25 - (now - self.last_broadcast)))
             return
         self.last_broadcast = now
         self.broadcast_pending = False
@@ -75,6 +87,11 @@ class Runtime:
                 dead.add(client)
         self.clients.difference_update(dead)
 
+    async def _delayed_broadcast(self, delay: float) -> None:
+        await asyncio.sleep(max(0.0, delay))
+        if self.broadcast_pending:
+            await self.broadcast()
+
     async def rest_fallback_loop(self):
         while True:
             await asyncio.sleep(self.settings.rest_poll_seconds)
@@ -83,12 +100,19 @@ class Runtime:
             if silent:
                 self.transport_state = "WS_SILENT"
                 self.cache.mark_all_ws_silent()
-                self.cache.mark_all_fallback()
+                successful = 0
                 for symbol in self.settings.symbols:
                     for timeframe in self.settings.timeframes:
-                        rows = await self.public.klines(symbol, timeframe, min(self.settings.warmup_limit, 80))
-                        if self.cache.update_rest(symbol, timeframe, rows, now):
-                            self.scanner.evaluate(symbol)
+                        try:
+                            rows = await self.public.klines(symbol, timeframe, 3)
+                            if self.cache.update_rest(symbol, timeframe, rows, now):
+                                self.scanner.evaluate(symbol)
+                            self.cache.caches[(symbol, timeframe)].mark_fallback()
+                            successful += 1
+                        except Exception as exc:
+                            self.cache.caches[(symbol, timeframe)].mark_error(type(exc).__name__, now)
+                if successful:
+                    self.transport_state = "LIVE_REST_FALLBACK"
                 await self.broadcast()
 
     def snapshot(self) -> dict:
@@ -103,11 +127,18 @@ class Runtime:
             client = PrivateReadOnlyClient(self.settings.rest_base, credentials.api_key, credentials.secret)
             try:
                 self.account = await client.snapshot()
+                self.account_success_at = self.account.get("snapshot_at", int(time.time() * 1000))
+                self.account["snapshot_age_ms"] = 0
+                self.account_error_class = None
             finally:
                 await client.close()
         except (CredentialError, Exception) as exc:
             logging.getLogger(__name__).warning("account panel unavailable: %s", type(exc).__name__)
-            self.account = {"auth": "AUTH_UNAVAILABLE", "note": "Private read-only panel unavailable; public scanner continues."}
+            self.account_error_class = type(exc).__name__
+            if self.account_success_at:
+                self.account = {**self.account, "auth": "STALE", "snapshot_age_ms": int(time.time() * 1000) - self.account_success_at, "error_class": self.account_error_class}
+            else:
+                self.account = {"auth": "AUTH_UNAVAILABLE", "note": "Private read-only panel unavailable; public scanner continues.", "error_class": self.account_error_class}
 
     async def account_refresh_loop(self):
         while True:
@@ -132,6 +163,9 @@ class Runtime:
         for task in self.tasks:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
+        if self.broadcast_task is not None:
+            self.broadcast_task.cancel()
+            await asyncio.gather(self.broadcast_task, return_exceptions=True)
         await self.public.close()
         for path in (self.pid_file, self.lock_file):
             try:
@@ -146,11 +180,4 @@ runtime = Runtime(settings)
 app = build_app(runtime)
 
 
-@app.on_event("startup")
-async def startup():
-    await runtime.start()
 
-
-@app.on_event("shutdown")
-async def shutdown():
-    await runtime.stop()

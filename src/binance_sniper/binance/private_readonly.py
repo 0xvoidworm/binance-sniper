@@ -13,7 +13,7 @@ class ReadOnlyApiError(RuntimeError):
 
 
 class PrivateReadOnlyClient:
-    ALLOWED_GET = frozenset({"/fapi/v2/account", "/fapi/v2/positionRisk", "/fapi/v1/openOrders", "/fapi/v1/positionSide/dual", "/fapi/v1/multiAssetsMargin", "/fapi/v1/exchangeInfo", "/sapi/v1/algo/futures/openOrders", "/fapi/v1/apiTradingStatus", "/sapi/v1/account/apiRestrictions", "/fapi/v1/time"})
+    ALLOWED_GET = frozenset({"/fapi/v2/account", "/fapi/v2/positionRisk", "/fapi/v1/openOrders", "/fapi/v1/openAlgoOrders", "/fapi/v1/positionSide/dual", "/fapi/v1/multiAssetsMargin", "/fapi/v1/exchangeInfo", "/sapi/v1/algo/futures/openOrders", "/fapi/v1/apiTradingStatus", "/sapi/v1/account/apiRestrictions", "/fapi/v1/time"})
     MUTATING = frozenset({"POST", "PUT", "DELETE", "PATCH"})
     FUTURES_HOST = "fapi.binance.com"
     ACCOUNT_HOST = "api.binance.com"
@@ -57,4 +57,8 @@ class PrivateReadOnlyClient:
         regular_orders = await self._get("/fapi/v1/openOrders")
         algo_payload = await self._get("/sapi/v1/algo/futures/openOrders")
         algo_orders = algo_payload.get("orders", []) if isinstance(algo_payload, dict) else algo_payload
-        return {"auth": "CONNECTED", "ip_restrict": restrictions.get("ipRestrict"), "futures_enabled": restrictions.get("enableFutures"), "account_locked": account.get("canTrade") is False, "position_mode": "HEDGE" if dual_side.get("dualSidePosition") else "ONE_WAY", "multi_assets": multi_assets.get("multiAssetsMargin"), "positions": sum(1 for x in positions if abs(float(x.get("positionAmt", 0))) > 0), "regular_orders": len(regular_orders), "algo_orders": len(algo_orders), "total_orders": len(regular_orders) + len(algo_orders), "orders": len(regular_orders) + len(algo_orders), "available_balance": float(account.get("availableBalance", 0)), "warning": "API IP restriction disabled (accepted operator policy)" if restrictions.get("ipRestrict") is False else None, "snapshot_at": int(time.time() * 1000)}
+        conditional_payload = await self._get("/fapi/v1/openAlgoOrders")
+        conditional_orders = conditional_payload.get("orders", []) if isinstance(conditional_payload, dict) else conditional_payload
+        if not isinstance(restrictions, dict) or not isinstance(account, dict) or not isinstance(positions, list) or not isinstance(regular_orders, list) or not isinstance(conditional_orders, list) or not isinstance(algo_orders, list):
+            raise ReadOnlyApiError("ACCOUNT_SCHEMA_INVALID")
+        return {"auth": "CONNECTED", "ip_restrict": restrictions.get("ipRestrict"), "futures_enabled": restrictions.get("enableFutures"), "account_locked": account.get("canTrade") is False, "position_mode": "HEDGE" if dual_side.get("dualSidePosition") else "ONE_WAY", "multi_assets": multi_assets.get("multiAssetsMargin"), "positions": sum(1 for x in positions if abs(float(x.get("positionAmt", 0))) > 0), "regular_orders": len(regular_orders), "conditional_orders": len(conditional_orders), "execution_algo_orders": len(algo_orders), "algo_orders": len(algo_orders), "total_orders": len(regular_orders) + len(conditional_orders) + len(algo_orders), "orders": len(regular_orders) + len(conditional_orders) + len(algo_orders), "available_balance": float(account.get("availableBalance", 0)), "warning": "API IP restriction disabled (accepted operator policy)" if restrictions.get("ipRestrict") is False else None, "snapshot_at": int(time.time() * 1000)}

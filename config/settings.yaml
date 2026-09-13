@@ -9,6 +9,8 @@ binance:
   timeframes: [4h, 1h, 15m, 5m]
   warmup_limit: 220
   reconnect_max_seconds: 60
+  ws_silent_seconds: 15
+  rest_poll_seconds: 5
 strategy:
   pivot_left_right: 2
   pullback_min_depth: 0.25

@@ -38,5 +38,7 @@ class MtfCache:
     def candles(self, symbol: str, timeframe: str):
         return self.caches[(symbol, timeframe)].values()
 
-    def quality(self) -> dict:
-        return {f"{s}:{tf}": vars(cache.quality) for (s, tf), cache in self.caches.items()}
+    def quality(self, now: int | None = None) -> dict:
+        import time
+        timestamp = now or int(time.time() * 1000)
+        return {f"{s}:{tf}": cache.audit(timestamp) for (s, tf), cache in self.caches.items()}

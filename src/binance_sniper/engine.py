@@ -62,11 +62,17 @@ class Scanner:
                 stop = zone["invalidation"]
                 risk = abs(entry - stop)
                 target = entry + (2 * risk if state["bias"] == "BULLISH" else -2 * risk)
-                candidates.append(Candidate(state["symbol"], state["bias"], trigger["time"], 0.0, 2.0, state["efficiency"], state["impulse"]["quality"], state["impulse"]["id"], "TRIGGER_CONFIRMED", entry, stop, target))
+                net_room = 2.0
+                pullback_quality = 1.0
+                trigger_quality = min(1.0, trigger.get("body_fraction", 0.0))
+                score = max(0.0, min(1.0, 0.30 * state["efficiency"] + 0.30 * state["impulse"]["quality"] + 0.20 * pullback_quality + 0.20 * trigger_quality))
+                candidate_id = f"{state['symbol']}:{state['impulse']['id']}:{trigger['time']}"
+                self.horizon.start(candidate_id, entry, stop, target, trigger["time"])
+                candidates.append(Candidate(state["symbol"], state["bias"], trigger["time"], score, net_room, state["efficiency"], state["impulse"]["quality"], state["impulse"]["id"], "TRIGGER_CONFIRMED", entry, stop, target))
         ranked = rank(candidates)
         charts = {}
         for symbol in self.settings.symbols:
             for timeframe in self.settings.timeframes:
                 cache = self.cache.caches[(symbol, timeframe)]
                 charts[f"{symbol}:{timeframe}"] = {"closed": [asdict(candle) for candle in cache.values()[-80:]], "preview": asdict(cache.preview_value()) if cache.preview_value() else None}
-        return {"symbols": self.latest, "charts": charts, "candidates": [c.json() for c in ranked], "events": list(self.events), "feed_quality": self.cache.quality(), "reconnects": self.reconnects}
+        return {"symbols": self.latest, "charts": charts, "candidates": [c.json() for c in ranked], "outcomes": {**self.horizon.active, **self.horizon.completed}, "events": list(self.events), "feed_quality": self.cache.quality(), "reconnects": self.reconnects}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -9,7 +10,17 @@ HTML = (Path(__file__).resolve().parents[2] / "web" / "index.html").read_text(en
 
 
 def build_app(state):
-    app = FastAPI(title="Binance Sniper", docs_url=None, redoc_url=None)
+    @asynccontextmanager
+    async def lifespan(app):
+        if hasattr(state, "start"):
+            await state.start()
+        try:
+            yield
+        finally:
+            if hasattr(state, "stop"):
+                await state.stop()
+
+    app = FastAPI(title="Binance Sniper", docs_url=None, redoc_url=None, lifespan=lifespan)
 
     @app.get("/", response_class=HTMLResponse)
     async def index():

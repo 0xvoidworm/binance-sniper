@@ -13,3 +13,5 @@
 Differences: Binance uses millisecond exchange timestamps and kline `x` finality instead of MT5 series indices. This implementation selects only final klines for strategy decisions. It does not place pending orders, calculate account risk, or reconcile trades because phase 1 is observation-only.
 
 The repair baseline additionally enforces the configured pullback depth/max-bars gate, directional impulse evidence, persistent zone identities, material lifecycle events, and a four-bar observation primitive. Binance transport health is stricter than the original MT5 timer: REST warmup is `REST_WARM`, WS payloads are required for `LIVE_WS`, and silent WS uses `LIVE_REST_FALLBACK`.
+
+Phase 1C adds a shared OHLC validator, server-time warmup boundary, stable impulse/zone identity, monotonic lifecycle ledger, deterministic bounded candidate score, directional four-bar MFE/MAE/final-R, and semantic replay tests. Execution parity is intentionally absent.

@@ -24,4 +24,4 @@ The account panel loads `%LOCALAPPDATA%\CodexBinance\credentials.dpapi` in memor
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Live smoke is separate from offline tests and must never be used as the only acceptance proof.
+Live smoke is separate from offline tests and must never be used as the only acceptance proof. On this network Binance WebSocket is silent; the service uses and labels production REST fallback honestly.
