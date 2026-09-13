@@ -2,6 +2,8 @@
 const M=TerminalModel,$=id=>document.getElementById(id);
 const ui={mode:'LIVE',symbol:'BTCUSDT',tf:'5m',tab:'journal',candidateId:null,live:{},data:{},replay:null,frame:0,receivedAt:null,receivedStamp:null,account:null,accountAt:null,pollFailed:false,wsOpen:false,viewCount:65,offset:0,crosshair:true,pointer:null,drag:null,playing:null};
 let socket,retry=1000,polling=false,accountPolling=false,replayLoading=false,drawQueued=false;
+let researchData=null,researchPolling=false;
+async function loadResearch(){if(researchPolling)return;researchPolling=true;try{researchData=await json('/api/research')}catch{researchData={...(researchData||{}),status:'UNAVAILABLE'}}finally{researchPolling=false;if(ui.tab==='research')renderTerminal()}}
 const tfName={'5m':'M5','15m':'M15','1h':'H1','4h':'H4'},stageName={WAIT_H4:'Tunggu H4',WAIT_H1:'Tunggu H1',WAIT_M15:'Tunggu M15',ARMED:'Tunggu area',TOUCHED:'Tunggu trigger',TRIGGERED:'Tracking',COMPLETED:'Selesai',INVALIDATED:'Gugur',EXPIRED:'Kedaluwarsa',DETECTED:'Area terdeteksi'};
 const dateFormat=new Intl.DateTimeFormat('id-ID',{timeZone:'Asia/Jakarta',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 const timeFormat=new Intl.DateTimeFormat('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
@@ -105,6 +107,8 @@ function empty(title,detail){const wrapper=el('div',null,'empty-terminal'),text=
 function renderTerminal(){
   document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('selected',b.dataset.tab===ui.tab);b.setAttribute('aria-selected',String(b.dataset.tab===ui.tab))});
   const host=$('terminalBody'),data=ui.data,view=M.selectedSetup(data,ui.symbol,ui.candidateId);
+  host.classList.toggle('research-active',ui.tab==='research');
+  if(ui.tab==='research'){put('terminalContext','RESEARCH / TERPISAH DARI CHART LIVE');ResearchPanel.render(host,researchData);return}
   put('candidateCount',(data.candidates||[]).length);put('terminalContext',`${ui.symbol||'—'} / ${ui.mode==='REPLAY'?'SYNTHETIC':'LIVE'} / WIB`);
   if(ui.tab==='journal'){
     const events=(data.events||[]).filter(e=>e.symbol===ui.symbol&&(!ui.candidateId||e.zone_id===view.zone?.zone_id));
@@ -177,4 +181,6 @@ function draw(){
   const q=ui.data.feed_quality?.[ui.symbol+':'+ui.tf];put('chartDataStatus',ui.mode==='REPLAY'?'SYNTHETIC / WIB':`${visible.length} bars · update ${age(M.feedAge(q,elapsed()))} · WIB`);
 }
 connect();poll();loadAccount();setInterval(poll,4000);setInterval(loadAccount,15000);setInterval(()=>{renderStatus();if(['health','account'].includes(ui.tab))renderTerminal();queueDraw()},1000);
+loadResearch();setInterval(loadResearch,30000);setInterval(()=>{if(ui.tab==='research')renderTerminal()},1000);
 if(new URLSearchParams(location.search).get('mode')==='replay')$('replayButton').click();
+if(new URLSearchParams(location.search).get('tab')==='research')document.querySelector('[data-tab="research"]').click();

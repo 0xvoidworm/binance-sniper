@@ -20,7 +20,7 @@ TERMINAL_ZONE_STATES = {ZoneState.COMPLETED, ZoneState.INVALIDATED, ZoneState.EX
 class Scanner:
     """Closed-bar-only H4 -> H1 -> M15 -> M5 causal scanner."""
 
-    def __init__(self, cache: MtfCache, settings, state_dir: Path | None = None):
+    def __init__(self, cache: MtfCache, settings, state_dir: Path | None = None, *, persist: bool = True):
         self.cache, self.settings = cache, settings
         self.latest: dict[str, dict] = {
             symbol: {"symbol": symbol, "bias": "NEUTRAL", "zone": None, "trigger": None, "status": "WAITING"}
@@ -28,9 +28,9 @@ class Scanner:
         }
         self.reconnects = 0
         root = state_dir or Path("state")
-        self.ledger = ZoneLedger(root / "zones.json")
+        self.ledger = ZoneLedger(root / "zones.json" if persist else None)
         self.ledger.load()
-        self.horizon = FourBarTracker(root / "four-bar.json")
+        self.horizon = FourBarTracker(root / "four-bar.json" if persist else None)
         self.horizon.load()
 
     @staticmethod
@@ -165,7 +165,11 @@ class Scanner:
                 if pullback:
                     zone = build_zone(
                         impulse, bias, m15, self.settings.zone_atr_width,
-                        created_at=int(pullback["detected_at"]), pullback=pullback,
+                        # A historical pullback becomes actionable only when all
+                        # current context has actually been observed. Never backdate
+                        # a newly created zone into the cached M5 history on warmup.
+                        created_at=max(int(pullback["detected_at"]), *(bars[-1].close_time for bars in (h4, h1, m15, m5) if bars)),
+                        pullback=pullback,
                     )
                     if zone:
                         zone.quality.update({"impulse_end": float(impulse["end"]), "regime_efficiency": float(efficiency)})

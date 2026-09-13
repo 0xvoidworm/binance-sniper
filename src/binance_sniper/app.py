@@ -15,6 +15,7 @@ from binance_sniper.engine import Scanner
 from binance_sniper.market.mtf_cache import MtfCache
 from binance_sniper.secrets import load_credentials
 from binance_sniper.web import build_app
+from binance_sniper.research.recorder import ResearchRecorder
 
 
 TaskFactory = Callable[[], Awaitable[None]]
@@ -50,6 +51,7 @@ class Runtime:
         self.state_dir = project_root / "state"
         self.pid_file = self.state_dir / "binance-sniper.pid"
         self.lock_file = self.state_dir / "binance-sniper.lock"
+        self.research = None
 
     def server_now(self) -> int:
         return int(time.time() * 1000) + self.server_offset_ms
@@ -276,6 +278,30 @@ class Runtime:
             await self._update_server_time()
             await asyncio.sleep(60)
 
+    async def research_loop(self) -> None:
+        try:
+            self.research = ResearchRecorder(self.state_dir / "research.sqlite3", self.settings, self.server_now())
+            while not self.stopping:
+                self.research.capture(self, self.server_now())
+                self._heartbeat("research")
+                await asyncio.sleep(5)
+        finally:
+            if self.research is not None:
+                self.research.close()
+                self.research = None
+
+    def research_snapshot(self) -> dict:
+        snapshot = dict(self.research.snapshot) if self.research is not None else {"status":"STARTING", "reports":[]}
+        health = self.task_health().get("research", {})
+        if health.get("status") not in {None, "RUNNING"}:
+            snapshot["status"] = health["status"]
+        snapshot["task"] = health
+        snapshot["snapshot_age_ms"] = max(0, self.server_now()-snapshot["updated_at"]) if snapshot.get("updated_at") else None
+        return snapshot
+
+    def research_event(self, run_id: str, candidate_id: str):
+        return self.research.store.event_view(run_id, candidate_id) if self.research is not None else None
+
     @staticmethod
     def _pid_alive(pid: int) -> bool:
         if pid <= 0:
@@ -309,6 +335,7 @@ class Runtime:
             self._spawn("market-stream", self.stream.run)
             self._spawn("account", self.account_refresh_loop)
             self._spawn("server-time", self.server_time_loop)
+            self._spawn("research", self.research_loop)
             for symbol in self.settings.symbols:
                 for timeframe in self.settings.timeframes:
                     self._spawn(f"rest:{symbol}:{timeframe}", lambda s=symbol, tf=timeframe: self.rest_feed_loop(s, tf))

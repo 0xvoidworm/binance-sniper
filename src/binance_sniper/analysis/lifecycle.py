@@ -52,7 +52,7 @@ def pullback_valid(candles: list[Candle], impulse: dict | None, direction: str, 
 
 
 class ZoneLedger:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path | None):
         self.path = path
         self.zones: dict[str, Zone] = {}
         self.last_events: set[tuple] = set()
@@ -61,7 +61,7 @@ class ZoneLedger:
         self.event_ids: set[str] = set()
 
     def load(self) -> None:
-        if not self.path.exists():
+        if self.path is None or not self.path.exists():
             return
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
@@ -79,6 +79,8 @@ class ZoneLedger:
             self.zones, self.event_ledger, self.candidates, self.last_events, self.event_ids = {}, [], {}, set(), set()
 
     def save(self) -> None:
+        if self.path is None:
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temp = self.path.with_suffix(".tmp")
         temp.write_text(json.dumps({

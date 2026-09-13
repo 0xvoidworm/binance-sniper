@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -47,6 +47,17 @@ def build_app(state):
     @app.get("/api/replay")
     async def api_replay():
         return replay_snapshot()
+
+    @app.get("/api/research")
+    async def api_research():
+        return state.research_snapshot() if hasattr(state, "research_snapshot") else {"status":"UNAVAILABLE", "reports":[]}
+
+    @app.get("/api/research/event")
+    async def api_research_event(run_id: str = Query(max_length=100), candidate_id: str = Query(max_length=300)):
+        result = state.research_event(run_id, candidate_id) if hasattr(state, "research_event") else None
+        if result is None:
+            raise HTTPException(status_code=404, detail="Recorded research event not found")
+        return result
 
     @app.websocket("/ws")
     async def socket(websocket: WebSocket):

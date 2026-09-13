@@ -1,4 +1,4 @@
-# Binance Sniper — Terminal UI
+# Binance Sniper — Phase 2 Research Terminal
 
 Read-only Binance USDⓈ-M Futures market observer with a causal H4 → H1 → M15 → M5 pipeline. It has no order, cancel, leverage, margin, or account-mutation capability.
 
@@ -35,4 +35,19 @@ node --test tests/terminal-model.test.cjs
 
 This phase validates correctness and observability. It does not prove profitability and intentionally contains no trading execution.
 
-This UI patch closes presentation issues found after Phase 1D. The strategy event study and trading execution are still outstanding; a terminal appearance does not change the scanner rules.
+## Phase 2: measured baseline
+
+Open the **Research · Phase 2** terminal tab. Historical results and the live observation journal are separate. **Lihat candle** opens the stored M5 evidence for an event; its four post-signal candles are explicitly hindsight, not decision-time inputs.
+
+The first frozen 90-day study (2026-06-15 through 2026-09-12 UTC) processed 228,840 public candles including warmup, 155,520 M5 decisions, and 27 signals. Modeled net mean was **-0.396R** in development (16 samples) and **-0.403R** in holdout (11 samples). This baseline has not demonstrated an edge. R is event risk-distance, not account return or a fixed percentage of capital.
+
+Reproduce with the existing project environment; no new dependency is required:
+
+```powershell
+.\.venv\Scripts\python.exe -m binance_sniper.research.download --days 90
+.\.venv\Scripts\python.exe -m binance_sniper.research.study
+```
+
+Download uses public market-data GET requests. Study replays local SQLite data, without network access. The runtime separately journals live observations to `state/research.sqlite3`. Research GET endpoints only read stored reports/events; opening the panel never starts a study or an order.
+
+See [Phase 2 methodology and findings](docs/PHASE2_RESEARCH.md), `STATUS.md`, and `TEST_RESULTS.md`. Historical JSON export: `C:\Users\yuri\Desktop\Workspace\outputs\binance-sniper-phase2-90d.json`.

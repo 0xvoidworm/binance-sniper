@@ -16,7 +16,9 @@ Updated: 2026-09-13
 - [x] MT5/Bloomberg-inspired local terminal with Market Watch, chart crosshair/zoom/pan, decision gates, and terminal tabs
 - [x] Browser disconnect/freshness protection, matching candidate/zone overlays, REST preview finality, and dataset-specific symbol selection
 - [x] Synthetic step/play replay through six causal frames with isolated account display
-- [ ] Strategy edge/event study and profitability validation
+- [x] Phase 2 immutable decision/signal journal, public-data historical event study, cost model, and terminal evidence panel
+- [x] 90-day causal baseline with a fixed 60/30 chronological split; 27 signals, negative modeled net means in both partitions
+- [ ] Demonstrated strategy edge, independent walk-forward, and profitability validation
 - [ ] Trading execution (intentionally absent)
 
-Latest offline verification: `48 passed` Python tests plus `8 passed` JavaScript model tests, one third-party Starlette/AnyIO deprecation warning, and clean `pip check`. See `TEST_RESULTS.md` for runtime evidence.
+Latest offline verification: `63 passed` Python tests plus `8 passed` JavaScript model tests, one third-party Starlette/AnyIO deprecation warning, and clean `pip check`. Research task added; latest service check: 28/28 RUNNING, 24/24 fallback feeds, no positions/orders. See `TEST_RESULTS.md`.

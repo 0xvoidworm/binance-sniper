@@ -2,6 +2,18 @@
 
 Updated: 2026-09-13
 
+## Latest: Phase 2
+
+- Python: **63 passed**, one existing Starlette/AnyIO dependency deprecation warning. JavaScript model: **8 passed**. Research/terminal JS syntax, Python compile, and `pip check` pass.
+- New tests cover next-open rather than signal-close fills; long/short fee/slippage; missing funding; conservative funding timing; stop/target ambiguity; gap stop; invalidated entry; incomplete/gapped horizons; preview/future exclusion; purge/embargo; empty metrics; immutable completed outcomes; SQLite restart/dedupe; live/historical separation; recorded event-window bounds; GET-only research routes; and warmup anti-backdating.
+- One run exposed a pre-existing Windows timer race: a planned-renewal timeout could be labelled WS_SILENT when the clock read fell slightly before the deadline. Classification now uses the deadline that was armed; the regression suite passes.
+- Public download: 228,840 validated candles with 24/24 complete feed windows; 1,620 funding records. Final causal study: 155,520 decisions, 27 signals, 16 development / 11 holdout; modeled net means -0.395672R / -0.403454R. Repeat instrumentation run has identical signals/outcomes, not new independent evidence.
+- Isolated browser integration: Research API/assets 200; historical/live source switch displays distinct samples; event dialog returns 54 recorded M5 candles and matching levels/model outcome; no JS console errors during normal testing. Frequent live renders preserve expanded research details. Responsive document width verified at 390px. Screenshot inspected inline; saving through the browser tool to Workspace/outputs was denied by that tool's path policy, so no screenshot file is claimed.
+- Service restarted using verified project PID/port ownership. Latest owner PID **26676**; **28/28 tasks RUNNING**, **24/24 LIVE_REST_FALLBACK**, max lag **0**; research recorder RUNNING with no restarts. The first new M5 close created **6 live decision rows**, distinct from historical rows. Account CONNECTED; positions and all order counts **0**.
+- No execution path was added. IP restriction policy, account credentials, margin, leverage, and order state were not modified. A normal closed-candle capture and synthetic restart test are not a multi-day live soak.
+
+The remaining sections record earlier phases and should not be mistaken for additional current validation samples.
+
 Offline command: `.\.venv\Scripts\python.exe -m pytest -q`
 
 Result after terminal UI patch: `48 passed`, with one third-party Starlette `TestClient` / AnyIO alias deprecation warning. Project lifespan warnings are gone. `pip check` reports no broken requirements. JavaScript: `node --test tests/terminal-model.test.cjs` reports `8 passed`; `node --check web/assets/terminal.js` succeeds.

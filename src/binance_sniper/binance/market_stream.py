@@ -37,7 +37,10 @@ class MarketStream:
                         try:
                             raw = await asyncio.wait_for(socket.recv(), timeout=min(self.silent_seconds, renew_in))
                         except asyncio.TimeoutError:
-                            if time.monotonic() - connected_at >= self.renew_seconds:
+                            # Classify the deadline we armed. Windows timers may
+                            # fire slightly early relative to monotonic(), which
+                            # previously mislabeled a renewal timeout as WS_SILENT.
+                            if renew_in <= self.silent_seconds:
                                 reason = "PLANNED_RENEWAL"
                                 await self.on_event({"type": "planned_renewal", "reconnects": self.reconnects})
                             else:
