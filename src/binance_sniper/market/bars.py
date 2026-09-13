@@ -26,6 +26,8 @@ class Quality:
     last_success_at: int = 0
     last_error_class: str | None = None
     reconnect_count: int = 0
+    valid_rows: int = 0
+    request_count: int = 0
 
 
 INTERVAL_MS = {"5m": 300_000, "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000}
@@ -51,9 +53,10 @@ class ClosedBarCache:
                 open_, high, low, close, volume = (float(values[index]) for index in (1, 2, 3, 4, 5))
             interval = INTERVAL_MS[self.timeframe]
             valid = all(math.isfinite(value) for value in (open_, high, low, close, volume))
-            valid = valid and open_ > 0 and min(high, low, close, volume) >= 0
+            valid = valid and min(open_, high, low, close) > 0 and volume >= 0
             valid = valid and high >= max(open_, close) and low <= min(open_, close) and high >= low
             valid = valid and close_time > open_time and open_time % interval == 0
+            valid = valid and interval - 2 <= close_time - open_time <= interval
             if not valid:
                 return None
             return Candle(self.symbol, self.timeframe, open_time, close_time, open_, high, low, close, volume, closed)
@@ -61,13 +64,17 @@ class ClosedBarCache:
             return None
 
     def _from_rest(self, row: list) -> Candle | None:
-        return self._parse(row, True)
+        candle = self._parse(row, True)
+        if candle is None:
+            self.quality.malformed += 1
+        return candle
 
     def warmup(self, rows: list[list], now: int | None = None) -> None:
+        if not isinstance(rows, list):
+            self.quality.malformed += 1
+            self.mark_stale()
+            return
         parsed = [candle for row in rows if (candle := self._from_rest(row)) is not None]
-        parsed.sort(key=lambda x: x.open_time)
-    def warmup(self, rows: list[list], now: int | None = None) -> None:
-        parsed = [self._from_rest(row) for row in rows if len(row) >= 7]
         parsed.sort(key=lambda x: x.open_time)
         cutoff = now if now is not None else (parsed[-1].open_time if parsed else 0)
         for candle in parsed:
@@ -75,12 +82,14 @@ class ClosedBarCache:
                 self._accept(candle)
             else:
                 self.preview = candle
-        self.quality.status = "REST_WARM" if self.items else "STALE"
-        self.quality.transport = "REST_WARM"
-        if now is not None and self.items:
+        self.quality.status = "REST_WARM" if parsed else "STALE"
+        self.quality.transport = "REST_WARM" if parsed else "STALE"
+        self.quality.valid_rows += len(parsed)
+        if now is not None and parsed:
             self.quality.last_success_at = now
+            self.quality.last_error_class = None
 
-    def update_ws(self, event: dict) -> bool:
+    def update_ws(self, event: dict, promote: bool = True) -> bool:
         now = int(event.get("received_ms", 0))
         self.quality.ws_messages += 1
         self.quality.last_payload_at = now
@@ -94,18 +103,30 @@ class ClosedBarCache:
             return False
         self.quality.last_valid_payload_at = now
         self.quality.last_success_at = now
-        self.quality.status = "LIVE_WS"
-        self.quality.transport = "LIVE_WS"
+        if promote:
+            self.quality.status = "LIVE_WS"
+            self.quality.transport = "LIVE_WS"
+        else:
+            self.quality.status = "RECOVERING"
+            self.quality.transport = "RECOVERING"
         if not candle.closed:
             self.preview = candle
             self.quality.last_preview_at = now
             return False
-        return self._accept(candle, source="WS")
+        return self._accept(candle, source="WS" if promote else "RECOVERING")
 
     def update_rest(self, rows: list[list], now: int) -> bool:
         changed = False
         self.quality.last_attempt_at = now
+        self.quality.request_count += 1
+        if not isinstance(rows, list) or not rows:
+            self.quality.malformed += 1
+            self.quality.last_error_class = "REST_SCHEMA_INVALID"
+            return False
         parsed = [candle for row in rows if (candle := self._from_rest(row)) is not None]
+        if not parsed:
+            self.quality.last_error_class = "REST_NO_VALID_ROWS"
+            return False
         for candle in sorted(parsed, key=lambda x: x.open_time):
             if candle.close_time <= now:
                 if candle.open_time > self._last_open:
@@ -113,11 +134,13 @@ class ClosedBarCache:
             else:
                 self.preview = candle
                 self.quality.last_preview_at = now
+        self.quality.valid_rows += len(parsed)
+        self.quality.last_valid_payload_at = now
+        self.quality.last_success_at = now
+        self.quality.last_error_class = None
         if changed:
             self.quality.rest_updates += 1
             self.quality.rest_reconciles += 1
-            self.quality.last_valid_payload_at = now
-            self.quality.last_success_at = now
         return changed
 
     def mark_ws_silent(self) -> None:
@@ -131,8 +154,7 @@ class ClosedBarCache:
     def mark_error(self, error_class: str, now: int) -> None:
         self.quality.last_attempt_at = now
         self.quality.last_error_class = error_class
-        if self.quality.last_success_at == 0:
-            self.mark_stale()
+        self.mark_stale()
 
     def mark_ws_live(self) -> None:
         self.quality.status = "LIVE_WS"
@@ -170,5 +192,12 @@ class ClosedBarCache:
     def audit(self, now: int) -> dict:
         last = self.quality.last_closed
         interval = INTERVAL_MS[self.timeframe]
-        return {**vars(self.quality), "age_ms": max(0, now - last) if last else None,
-                "lag_bars": max(0, (now - last) // interval - 1) if last else None}
+        success = self.quality.last_success_at
+        preview = self.quality.last_preview_at
+        return {
+            **vars(self.quality),
+            "age_ms": max(0, now - last) if last else None,
+            "success_age_ms": max(0, now - success) if success else None,
+            "preview_age_ms": max(0, now - preview) if preview else None,
+            "lag_bars": max(0, (now - last) // interval) if last else None,
+        }

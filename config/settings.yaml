@@ -11,6 +11,10 @@ binance:
   reconnect_max_seconds: 60
   ws_silent_seconds: 15
   rest_poll_seconds: 5
+  rest_poll_seconds_by_timeframe: {5m: 3, 15m: 5, 1h: 15, 4h: 30}
+  rest_concurrency: 6
+  feed_stale_multiplier: 3
+  websocket_renew_seconds: 82800
 strategy:
   pivot_left_right: 2
   pullback_min_depth: 0.25

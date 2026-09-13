@@ -2,10 +2,16 @@
 
 Project: `C:\Users\yuri\Desktop\Workspace\projects\binance-sniper`
 
-Runtime: FastAPI/Uvicorn on `127.0.0.1:8765`. Main entrypoint: `binance_sniper.app:app`. Logs are emitted by the foreground process; no secret-bearing log is written.
+Entrypoint: `binance_sniper.app:app`, bound to `127.0.0.1:8765`. The service is observation-only. Binance mutations are not implemented and non-allowlisted paths are rejected before network access.
 
-The service warms production USD-M Futures public klines for six symbols and four timeframes, then consumes combined kline WebSocket streams. Only `x=true` candles update the decision cache. When WS is silent, the watchdog transitions to `WS_SILENT` and polls production REST as `LIVE_REST_FALLBACK`; it never labels warmup as `LIVE_WS`. Private account data uses DPAPI and a GET-only endpoint allowlist. All mutation methods/endpoints are rejected before network.
+Runtime design:
 
-Phase 1C verification: 20 offline tests pass, pip check is clean, and the service is running at PID 18592. WS is silent with 0 valid payloads, so every feed is labeled `LIVE_REST_FALLBACK`; preview and closed-bar freshness are populated. Account read-only is connected with regular/conditional/execution-algo/total order counts all zero. No mutation endpoint exists.
+- `MarketStream` owns WebSocket connect/watchdog/reconnect/renewal.
+- Twenty-four independently supervised REST feed loops maintain live fallback with timeframe-specific cadence.
+- `ClosedBarCache` separates closed decision bars from visual preview and exposes quality/freshness counters.
+- `Scanner` owns the causal lifecycle; `snapshot()` is pure and cannot create candidates or advance outcomes.
+- `ZoneLedger` and `FourBarTracker` persist atomically under `state/`.
+- `/api/replay` runs a deterministic production-pipeline fixture with no external mutation.
+- `/api/account` computes snapshot age at read time and preserves last-known data as `STALE` on refresh failure.
 
-Remaining work before any future phase: complete replay-mode visual screenshot/overlay fixture, add supervised task/rate-limit telemetry, and run persistence/restart soak. Do not enable execution; this project remains observation-only.
+On this network, Binance market WebSocket connections remain silent. The runtime therefore reports the WebSocket substate honestly while keeping all validated REST feeds independently live. Do not infer strategy profitability from transport health or replay correctness.

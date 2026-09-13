@@ -21,3 +21,20 @@ def test_long_short_directional_results_and_ambiguity():
     ambiguous=FourBarTracker(); ambiguous.start('amb',100,90,110,0)
     result=ambiguous.observe('amb',bar(1,110,90,100),4)
     assert result['first_hit']['kind']=='INTRABAR_AMBIGUOUS'
+
+
+def test_active_tracker_persists_and_dedupes_same_bar(tmp_path):
+    path=tmp_path/'four-bar.json'
+    tracker=FourBarTracker(path); assert tracker.start('c',100,90,120,0,'BTCUSDT','z')
+    tracker.observe('c',bar(1,105,98,102),4)
+    restored=FourBarTracker(path); restored.load()
+    restored.observe('c',bar(1,150,50,100),4)
+    assert restored.active['c']['bars']==1
+    for i in range(2,5): restored.observe('c',bar(i,110,95,105),4)
+    assert restored.completed['c']['bars']==4
+    assert not restored.start('c',100,90,120,0)
+
+
+def test_zero_risk_candidate_is_rejected():
+    tracker=FourBarTracker()
+    assert tracker.start('zero',100,100,120,0) is False

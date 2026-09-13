@@ -11,14 +11,14 @@ class MtfCache:
     def warmup(self, symbol: str, timeframe: str, rows: list[list], now: int | None = None) -> None:
         self.caches[(symbol, timeframe)].warmup(rows, now)
 
-    def update(self, payload: dict) -> bool:
+    def update(self, payload: dict, promote: bool = True) -> bool:
         stream = payload.get("stream", "")
         data = payload.get("data", {})
         symbol = data.get("s") or data.get("k", {}).get("s")
         timeframe = data.get("k", {}).get("i")
         if not symbol or not timeframe or (symbol, timeframe) not in self.caches:
             return False
-        return self.caches[(symbol, timeframe)].update_ws(payload)
+        return self.caches[(symbol, timeframe)].update_ws(payload, promote=promote)
 
     def mark_all_ws_silent(self) -> None:
         for cache in self.caches.values():

@@ -6,22 +6,49 @@ from pathlib import Path
 from binance_sniper.domain import Candle, Zone, ZoneState
 
 
-def zone_key(impulse: dict, created_at: int) -> str:
-    return f"{impulse['id']}:{created_at}"
+def zone_key(impulse: dict, created_at: int | None = None) -> str:
+    """Stable identity for one source impulse (created_at kept for API compatibility)."""
+    return str(impulse["id"])
+
+
+def pullback_assessment(
+    candles: list[Candle], impulse: dict | None, direction: str,
+    min_depth: float, max_depth: float, max_bars: int,
+) -> dict | None:
+    if not impulse or direction == "NEUTRAL" or max_bars < 1:
+        return None
+    span = abs(float(impulse["end"]) - float(impulse["origin"]))
+    if span <= 0:
+        return None
+    post_impulse = [c for c in candles if c.close_time > int(impulse["end_time"])]
+    for index, candle in enumerate(post_impulse[:max_bars], start=1):
+        observed = post_impulse[:index]
+        extreme = min(c.low for c in observed) if direction == "BULLISH" else max(c.high for c in observed)
+        depth = (
+            (float(impulse["end"]) - extreme) / span
+            if direction == "BULLISH"
+            else (extreme - float(impulse["end"])) / span
+        )
+        structure_holds = (
+            candle.close > float(impulse["origin"])
+            if direction == "BULLISH"
+            else candle.close < float(impulse["origin"])
+        )
+        if min_depth <= depth <= max_depth and structure_holds:
+            midpoint = (min_depth + max_depth) / 2
+            half_range = max((max_depth - min_depth) / 2, 1e-12)
+            quality = max(0.0, min(1.0, 1.0 - abs(depth - midpoint) / half_range))
+            return {
+                "detected_at": candle.close_time,
+                "depth": depth,
+                "quality": quality,
+                "bars": index,
+            }
+    return None
 
 
 def pullback_valid(candles: list[Candle], impulse: dict | None, direction: str, min_depth: float, max_depth: float, max_bars: int) -> bool:
-    if not impulse or len(candles) < 2 or direction == "NEUTRAL":
-        return False
-    span = abs(float(impulse["end"]) - float(impulse["origin"]))
-    if span <= 0:
-        return False
-    recent = [candle for candle in candles if candle.open_time >= impulse["end_time"]][-max_bars:]
-    if not recent:
-        return False
-    extreme = min(c.low for c in recent) if direction == "BULLISH" else max(c.high for c in recent)
-    depth = ((float(impulse["end"]) - extreme) / span if direction == "BULLISH" else (extreme - float(impulse["end"])) / span)
-    return min_depth <= depth <= max_depth and (recent[-1].close > float(impulse["origin"]) if direction == "BULLISH" else recent[-1].close < float(impulse["origin"]))
+    return pullback_assessment(candles, impulse, direction, min_depth, max_depth, max_bars) is not None
 
 
 class ZoneLedger:
@@ -30,6 +57,8 @@ class ZoneLedger:
         self.zones: dict[str, Zone] = {}
         self.last_events: set[tuple] = set()
         self.event_ledger: list[dict] = []
+        self.candidates: dict[str, dict] = {}
+        self.event_ids: set[str] = set()
 
     def load(self) -> None:
         if not self.path.exists():
@@ -40,18 +69,39 @@ class ZoneLedger:
                 value["state"] = ZoneState(value["state"])
                 self.zones[key] = Zone(**value)
             self.event_ledger = payload.get("events", [])
+            self.candidates = payload.get("candidates", {})
+            self.event_ids = {str(event.get("event_id")) for event in self.event_ledger if event.get("event_id")}
+            self.last_events = {
+                (event.get("zone_id"), event.get("from"), event.get("to"), event.get("reason_code"))
+                for event in self.event_ledger if event.get("from") is not None
+            }
         except (OSError, ValueError, TypeError, KeyError):
-            self.zones = {}
+            self.zones, self.event_ledger, self.candidates, self.last_events, self.event_ids = {}, [], {}, set(), set()
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temp = self.path.with_suffix(".tmp")
-        temp.write_text(json.dumps({"zones": {k: {**asdict(v), "state": v.state.value} for k, v in self.zones.items()}, "events": self.event_ledger}, sort_keys=True), encoding="utf-8")
+        temp.write_text(json.dumps({
+            "zones": {k: {**asdict(v), "state": v.state.value} for k, v in self.zones.items()},
+            "events": self.event_ledger,
+            "candidates": self.candidates,
+        }, sort_keys=True), encoding="utf-8")
         temp.replace(self.path)
 
     def upsert(self, zone: Zone, key: str) -> Zone:
         if key not in self.zones:
+            zone.zone_id = key
+            zone.updated_at = zone.created_at
+            zone.transition_at = zone.created_at
             self.zones[key] = zone
+            event = {
+                "event_id": f"{key}|NONE|DETECTED|ZONE_DETECTED",
+                "zone_id": key, "symbol": zone.symbol, "from": None,
+                "to": ZoneState.DETECTED.value, "reason_code": "ZONE_DETECTED",
+                "time": zone.created_at,
+            }
+            self.event_ledger.append(event)
+            self.event_ids.add(event["event_id"])
         return self.zones[key]
 
     def transition(self, key: str, state: ZoneState, reason: str, now: int) -> bool:
@@ -64,31 +114,85 @@ class ZoneLedger:
             return False
         zone.state = state
         zone.touch_count += 1 if state == ZoneState.TOUCHED else 0
-        self.event_ledger.append({"event_id": "|".join(map(str, token)), "zone_id": key, "from": token[1], "to": token[2], "reason_code": reason, "time": now})
+        zone.updated_at = now
+        zone.transition_at = now
+        zone.transition_reason = reason
+        event = {"event_id": "|".join(map(str, token)), "zone_id": key, "symbol": zone.symbol, "from": token[1], "to": token[2], "reason_code": reason, "time": now}
+        self.event_ledger.append(event)
+        self.event_ids.add(event["event_id"])
         self.last_events.add(token)
+        return True
+
+    def register_candidate(self, candidate_id: str, payload: dict) -> bool:
+        if candidate_id in self.candidates:
+            return False
+        self.candidates[candidate_id] = payload
+        event = {
+            "event_id": f"{candidate_id}|CANDIDATE_CREATED",
+            "candidate_id": candidate_id,
+            "zone_id": payload["zone_id"],
+            "symbol": payload["symbol"],
+            "from": None,
+            "to": "CANDIDATE",
+            "reason_code": payload["reason_code"],
+            "time": payload["decision_time"],
+        }
+        self.event_ledger.append(event)
+        self.event_ids.add(event["event_id"])
+        return True
+
+    def record_event_once(self, event: dict) -> bool:
+        event_id = str(event["event_id"])
+        if event_id in self.event_ids:
+            return False
+        self.event_ledger.append(event)
+        self.event_ids.add(event_id)
         return True
 
 
 class FourBarTracker:
-    def __init__(self):
+    def __init__(self, path: Path | None = None):
+        self.path = path
         self.active: dict[str, dict] = {}
         self.completed: dict[str, dict] = {}
 
-    def start(self, candidate_id: str, entry: float, stop: float, target: float, started_at: int) -> None:
+    def load(self) -> None:
+        if self.path is None or not self.path.exists():
+            return
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            self.active = payload.get("active", {})
+            self.completed = payload.get("completed", {})
+        except (OSError, ValueError, TypeError):
+            self.active, self.completed = {}, {}
+
+    def save(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temp = self.path.with_suffix(".tmp")
+        temp.write_text(json.dumps({"active": self.active, "completed": self.completed}, sort_keys=True), encoding="utf-8")
+        temp.replace(self.path)
+
+    def start(self, candidate_id: str, entry: float, stop: float, target: float, started_at: int, symbol: str = "", zone_id: str = "") -> bool:
         if candidate_id not in self.active and candidate_id not in self.completed and abs(entry - stop) > 0:
             direction = "LONG" if target > entry else "SHORT"
-            self.active[candidate_id] = {"candidate_id": candidate_id, "direction": direction, "entry": entry, "stop": stop, "target": target, "started_at": started_at, "bars": 0, "mfe": 0.0, "mae": 0.0, "final_r": None, "first_hit": None, "hit_1r": False, "hit_1_5r": False, "hit_2r": False, "status": "INCOMPLETE"}
+            self.active[candidate_id] = {"candidate_id": candidate_id, "symbol": symbol, "zone_id": zone_id, "direction": direction, "entry": entry, "stop": stop, "target": target, "started_at": started_at, "last_bar_close": started_at, "bars": 0, "mfe": 0.0, "mae": 0.0, "final_r": None, "first_hit": None, "first_hits": {}, "hit_1r": False, "hit_1_5r": False, "hit_2r": False, "status": "INCOMPLETE"}
+            self.save()
+            return True
+        return False
 
     def observe(self, candidate_id: str, candle: Candle, horizon: int = 4) -> dict | None:
         item = self.active.get(candidate_id)
         if item is None and candidate_id in self.completed:
             return self.completed[candidate_id]
-        if not item or candle.close_time <= item["started_at"]:
+        if not item or candle.close_time <= max(item["started_at"], item.get("last_bar_close", 0)):
             return item
         risk = abs(item["entry"] - item["stop"])
         if risk <= 0 or item["status"] != "INCOMPLETE":
             return item
         item["bars"] += 1
+        item["last_bar_close"] = candle.close_time
         if item["direction"] == "LONG":
             favorable, adverse = (candle.high - item["entry"]) / risk, (item["entry"] - candle.low) / risk
             stop_hit, target_hit = candle.low <= item["stop"], candle.high >= item["target"]
@@ -97,9 +201,12 @@ class FourBarTracker:
             stop_hit, target_hit = candle.high >= item["stop"], candle.low <= item["target"]
         item["mfe"] = max(item["mfe"], favorable)
         item["mae"] = max(item["mae"], adverse)
-        item["hit_1r"] |= item["mfe"] >= 1
-        item["hit_1_5r"] |= item["mfe"] >= 1.5
-        item["hit_2r"] |= item["mfe"] >= 2
+        for label, threshold in (("1R", 1.0), ("1.5R", 1.5), ("2R", 2.0)):
+            if favorable >= threshold and label not in item["first_hits"]:
+                item["first_hits"][label] = {"bar": item["bars"], "time": candle.close_time}
+        item["hit_1r"] = "1R" in item["first_hits"]
+        item["hit_1_5r"] = "1.5R" in item["first_hits"]
+        item["hit_2r"] = "2R" in item["first_hits"]
         if item["first_hit"] is None and stop_hit and target_hit:
             item["first_hit"] = {"kind": "INTRABAR_AMBIGUOUS", "bar": item["bars"], "time": candle.close_time}
         elif item["first_hit"] is None and stop_hit:
@@ -111,4 +218,5 @@ class FourBarTracker:
             item["status"] = "COMPLETED"
             self.completed[candidate_id] = item
             del self.active[candidate_id]
+        self.save()
         return item

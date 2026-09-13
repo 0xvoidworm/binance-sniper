@@ -1,9 +1,9 @@
 from __future__ import annotations
-from binance_sniper.domain import Candle, Zone
+from binance_sniper.domain import Candle, Zone, ZoneState
 
 
 def detect(candles: list[Candle], zone: Zone | None, direction: str, min_body: float = .45) -> dict | None:
-    if len(candles) < 3 or not zone or zone.state in {zone.state.EXPIRED, zone.state.INVALIDATED}:
+    if len(candles) < 3 or not zone or zone.state != ZoneState.TOUCHED:
         return None
     bar, previous = candles[-1], candles[-2]
     touched = bar.low <= zone.upper and bar.high >= zone.lower

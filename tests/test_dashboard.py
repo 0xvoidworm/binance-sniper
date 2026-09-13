@@ -14,3 +14,8 @@ def test_dashboard_smoke():
     response = client.get('/')
     assert response.status_code == 200
     assert 'BINANCE SNIPER' in response.text
+    replay=client.get('/api/replay')
+    assert replay.status_code==200
+    payload=replay.json()
+    assert payload['symbols']['BTCUSDT']['status']=='COMPLETED'
+    assert payload['candidates'][0]['score']>0

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import os
 import yaml
@@ -31,6 +31,10 @@ class Settings:
     credentials_path: Path
     ws_silent_seconds: int = 15
     rest_poll_seconds: int = 5
+    rest_poll_seconds_by_timeframe: dict[str, int] = field(default_factory=lambda: {"5m": 3, "15m": 5, "1h": 15, "4h": 30})
+    rest_concurrency: int = 6
+    feed_stale_multiplier: int = 3
+    websocket_renew_seconds: int = 82_800
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -52,6 +56,14 @@ class Settings:
             four_bar_horizon=int(strategy["four_bar_horizon"]), credentials_path=Path(credential_path),
             ws_silent_seconds=int(binance.get("ws_silent_seconds", 15)),
             rest_poll_seconds=int(binance.get("rest_poll_seconds", 5)),
+            rest_poll_seconds_by_timeframe={
+                key: int(value) for key, value in binance.get(
+                    "rest_poll_seconds_by_timeframe", {"5m": 3, "15m": 5, "1h": 15, "4h": 30}
+                ).items()
+            },
+            rest_concurrency=int(binance.get("rest_concurrency", 6)),
+            feed_stale_multiplier=int(binance.get("feed_stale_multiplier", 3)),
+            websocket_renew_seconds=int(binance.get("websocket_renew_seconds", 82_800)),
         )
         settings.validate()
         return settings
@@ -65,6 +77,10 @@ class Settings:
             raise ValueError("Invalid symbol universe")
         if self.timeframes != TIMEFRAMES or self.warmup_limit < 40 or self.ws_silent_seconds <= 0 or self.rest_poll_seconds <= 0:
             raise ValueError("Invalid feed configuration")
+        if set(self.rest_poll_seconds_by_timeframe) != set(TIMEFRAMES) or any(value <= 0 for value in self.rest_poll_seconds_by_timeframe.values()):
+            raise ValueError("Invalid REST polling cadence")
+        if not 1 <= self.rest_concurrency <= 24 or self.feed_stale_multiplier < 2 or not 60 <= self.websocket_renew_seconds < 86_400:
+            raise ValueError("Invalid transport controls")
         if not 0 < self.pullback_min_depth < self.pullback_max_depth <= 1 or self.pullback_max_bars < 1:
             raise ValueError("Invalid pullback configuration")
         if self.four_bar_horizon < 1 or not 0 < self.trigger_min_body_fraction <= 1:

@@ -49,6 +49,11 @@ class Zone:
     quality: dict[str, float] = field(default_factory=dict)
     state: ZoneState = ZoneState.DETECTED
     touch_count: int = 0
+    zone_id: str = ""
+    updated_at: int = 0
+    transition_at: int = 0
+    transition_reason: str = "ZONE_DETECTED"
+    last_evaluated_m5: int = 0
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,8 @@ class Candidate:
     entry_reference: float
     stop_reference: float
     target_reference: float
+    candidate_id: str = ""
+    score_components: dict[str, float] = field(default_factory=dict)
 
     def json(self) -> dict[str, Any]:
         return asdict(self)

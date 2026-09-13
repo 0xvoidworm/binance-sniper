@@ -1,8 +1,7 @@
 # Known Gaps
 
-- Binance WS is silent on this network; the production REST fallback is active and correctly labeled. WS recovery reconciliation needs a longer controlled outage test.
-- Dashboard chart has live OHLC and preview rendering, but full time/price axis labels and complete replay-mode overlay screenshot remain open.
-- Four-bar outcome tracking is wired for candidates and tested, but long-running persistence/restart integration with live candidate events needs a dedicated soak test.
-- Task registry/rate-limit header telemetry and planned 24-hour WS renewal remain operational follow-up work.
-- No order mutation endpoint exists by design.
-- Live smoke depends on network and Binance availability; offline tests do not prove production connectivity.
+- Binance market WebSocket connects but does not deliver payloads on this local network. Silent reconnect behavior is tested deterministically; a real WS recovery handover still requires a network where payloads arrive.
+- The longest completed runtime observation is a short local soak, not a multi-day reliability run.
+- Strategy parameters and score weights are explicit hypotheses. They have not yet passed an event study, walk-forward analysis, fee/slippage model, or profitability validation.
+- Persistence uses small atomic JSON ledgers suitable for this observer phase, not a transactional event database.
+- Execution, leverage selection, liquidation modeling, and live order management are deliberately absent.

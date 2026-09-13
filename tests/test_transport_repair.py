@@ -20,7 +20,7 @@ def test_rest_warmup_is_not_websocket_live_and_exact_gap_is_counted():
 
 def test_preview_and_final_are_separate():
     cache = ClosedBarCache('BTCUSDT', '5m')
-    cache.warmup([row(0, 10, 299999), row(300000, 11, 999999)], now=500000)
+    cache.warmup([row(0, 10, 299999), row(300000, 11, 599999)], now=500000)
     assert len(cache.values()) == 1
     assert cache.preview_value().open_time == 300000
 
