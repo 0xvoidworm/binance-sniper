@@ -45,6 +45,7 @@ class Runtime:
         self.broadcast_pending = False
         self.broadcast_task: asyncio.Task | None = None
         self.server_offset_ms = 0
+        self.instrument_meta: dict[str, dict] = {}
         self.stopping = False
         self.state_dir = project_root / "state"
         self.pid_file = self.state_dir / "binance-sniper.pid"
@@ -87,6 +88,12 @@ class Runtime:
         await self._update_server_time()
         try:
             info = await self.public.exchange_info()
+            for instrument in info.get("symbols", []):
+                symbol = instrument.get("symbol")
+                if symbol in self.settings.symbols:
+                    tick = next((f.get("tickSize") for f in instrument.get("filters", []) if f.get("filterType") == "PRICE_FILTER"), None)
+                    if tick:
+                        self.instrument_meta[symbol] = {"tick_size": tick}
             for limit in info.get("rateLimits", []):
                 if limit.get("rateLimitType") == "REQUEST_WEIGHT" and limit.get("interval") == "MINUTE":
                     self.public.weight_limit_1m = int(limit["limit"])
@@ -218,11 +225,15 @@ class Runtime:
     def snapshot(self) -> dict:
         snapshot = self.scanner.snapshot()
         quality = snapshot["feed_quality"]
+        for key, item in quality.items():
+            timeframe = key.rsplit(":", 1)[-1]
+            item["stale_after_ms"] = self.settings.rest_poll_seconds_by_timeframe[timeframe] * self.settings.feed_stale_multiplier * 1000
         snapshot.update(
             transport_state=self._derived_transport(quality), ws_state=self.ws_state,
             last_ws_payload=self.last_ws_payload, task_health=self.task_health(),
             rest_telemetry=self.public.telemetry(), server_offset_ms=self.server_offset_ms,
             snapshot_at=int(time.time() * 1000),
+            instrument_meta=self.instrument_meta,
         )
         return snapshot
 

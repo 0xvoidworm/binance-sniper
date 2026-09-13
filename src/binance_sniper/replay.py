@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -71,7 +72,7 @@ def replay_settings():
     )
 
 
-def run_replay(state_dir: Path, future_mutator=None) -> dict:
+def run_replay(state_dir: Path, future_mutator=None, include_frames=False) -> dict:
     bars, trigger_index = fixture_bars()
     if future_mutator is not None:
         future_mutator(bars["5m"], trigger_index)
@@ -86,17 +87,32 @@ def run_replay(state_dir: Path, future_mutator=None) -> dict:
     cache.warmup(SYMBOL, "5m", [_row(candle) for candle in initial_m5], trigger_time)
     scanner = Scanner(cache, settings, state_dir)
     scanner.evaluate_all()
+    frames = []
+
+    def capture(now):
+        frame = deepcopy(scanner.snapshot())
+        frame["feed_quality"] = cache.quality(now)
+        frame.update(transport_state="REPLAY", ws_state="REPLAY", snapshot_at=now, task_health={}, rest_telemetry={}, synthetic=True)
+        return frame
+
+    if include_frames:
+        frames.append(capture(trigger_time))
     for candle in bars["5m"][trigger_index: trigger_index + 5]:
         cache.update_rest(SYMBOL, "5m", [_row(candle)], candle.close_time + 1)
         scanner.evaluate(SYMBOL)
+        if include_frames:
+            frames.append(capture(candle.close_time + 1))
     cache.mark_all_fallback()
     snapshot = scanner.snapshot()
     replay_now = bars["5m"][trigger_index + 4].close_time + 1
     snapshot["feed_quality"] = cache.quality(replay_now)
     snapshot.update(transport_state="REPLAY", ws_state="REPLAY", snapshot_at=replay_now, task_health={}, rest_telemetry={})
+    snapshot["synthetic"] = True
+    if include_frames:
+        snapshot["frames"] = frames
     return snapshot
 
 
 def build_replay_snapshot() -> dict:
     with tempfile.TemporaryDirectory(prefix="binance-sniper-replay-") as directory:
-        return run_replay(Path(directory))
+        return run_replay(Path(directory), include_frames=True)

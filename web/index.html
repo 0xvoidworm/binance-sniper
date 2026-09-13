@@ -1,79 +1,54 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Binance Sniper</title>
-  <style>
-    :root{--bg:#0b0e12;--panel:#121820;--line:#273442;--text:#e8f0f5;--muted:#8da0ad;--cyan:#57d9e8;--amber:#f5b84b;--green:#48d597;--red:#ff6f7d}
-    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#15232b 0,#0b0e12 42%);color:var(--text);font:14px/1.45 Segoe UI,system-ui,sans-serif}
-    header{display:flex;justify-content:space-between;align-items:center;padding:20px 28px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:22px;letter-spacing:.04em}small,.muted{color:var(--muted)}
-    main{padding:20px 28px;display:grid;grid-template-columns:1.7fr 1fr;gap:18px}.panel{background:rgba(18,24,32,.94);border:1px solid var(--line);border-radius:8px;padding:16px;box-shadow:0 12px 32px #0005}
-    .toolbar,.badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.toolbar{margin-bottom:12px}select,button{background:#1b2731;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:8px 10px}button{cursor:pointer}.active{border-color:var(--cyan);color:var(--cyan)}
-    canvas{width:100%;height:520px;background:#0d1318;border:1px solid #21303b;border-radius:5px}.badge{padding:5px 8px;border:1px solid var(--line);border-radius:4px;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.metric{padding:11px;background:#0d141a;border-left:2px solid var(--cyan);min-height:62px}.metric b{display:block;font-size:16px;overflow-wrap:anywhere}.bull{color:var(--green)}.bear{color:var(--red)}.warn{color:var(--amber)}.danger{color:var(--red)}
-    .events{max-height:240px;overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:11px}.event{padding:7px 0;border-bottom:1px solid #1e2932}.detail{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.65;overflow-wrap:anywhere}h3{margin:17px 0 8px}
-    @media(max-width:950px){main{grid-template-columns:1fr;padding:14px}.panel{padding:12px}header{padding:16px}canvas{height:430px}}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Binance Sniper · Terminal</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/assets/terminal.css">
+<script defer src="/assets/terminal-model.js"></script>
+<script defer src="/assets/terminal.js"></script>
 </head>
 <body>
-  <header><div><h1>BINANCE SNIPER</h1><small>USDⓈ-M Futures · causal observation · read-only</small></div><div class="badges"><span id="wsState" class="badge">WS STARTING</span><span id="connection" class="badge">STARTING</span></div></header>
-  <main>
-    <section class="panel">
-      <div class="toolbar"><select id="symbol"></select><select id="tf"><option>5m</option><option>15m</option><option>1h</option><option>4h</option></select><button id="liveButton" class="active">LIVE</button><button id="replayButton">REPLAY PROOF</button><span class="muted">decisions: closed bars only · preview: visual only</span></div>
-      <canvas id="chart" width="1100" height="520"></canvas>
-    </section>
-    <section class="panel">
-      <div class="grid" id="metrics"></div><div class="badges" id="symbols"></div>
-      <h3>Feed & runtime</h3><div id="runtime" class="detail muted">Loading…</div>
-      <h3>Account read-only</h3><div id="account" class="detail muted">Loading…</div>
-      <h3>Audit events</h3><div id="events" class="events"></div>
-    </section>
-  </main>
-  <script>
-    const byId=id=>document.getElementById(id); const state={}; const liveState={};
-    let chosen='BTCUSDT', tf='5m', mode='LIVE', browserLastMessage=0, retry=1000, socket;
-    const number=v=>v===null||v===undefined||v===''?null:(Number.isFinite(Number(v))?Number(v):null);
-    const price=v=>{const n=number(v);return n===null?'-':n.toLocaleString(undefined,{maximumFractionDigits:6})};
-    const age=v=>{const n=number(v);return n===null?'-':n<1000?`${Math.round(n)}ms`:`${(n/1000).toFixed(1)}s`};
-    function clear(node){while(node.firstChild)node.removeChild(node.firstChild)}
-    function text(node,value,className){const span=document.createElement('span');span.textContent=String(value??'-');if(className)span.className=className;node.appendChild(span);return span}
-    function selectState(payload){clearObject(state);Object.assign(state,payload);render()}
-    function clearObject(value){for(const key of Object.keys(value))delete value[key]}
-    byId('symbol').onchange=e=>{chosen=e.target.value;render()};byId('tf').onchange=e=>{tf=e.target.value;render()};
-    byId('liveButton').onclick=()=>{mode='LIVE';byId('liveButton').classList.add('active');byId('replayButton').classList.remove('active');selectState(liveState)};
-    byId('replayButton').onclick=async()=>{const response=await fetch('/api/replay');mode='REPLAY';byId('replayButton').classList.add('active');byId('liveButton').classList.remove('active');selectState(await response.json())};
-
-    function chartData(){const series=state.charts?.[`${chosen}:${tf}`]||{};return {closed:series.closed||[],preview:series.preview||null,symbol:state.symbols?.[chosen]||{}}}
-    function drawTriangle(ctx,x,y,color){ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(x,y-6);ctx.lineTo(x-6,y+6);ctx.lineTo(x+6,y+6);ctx.closePath();ctx.fill()}
-    function draw(){
-      const canvas=byId('chart'),ctx=canvas.getContext('2d'),data=chartData(),candles=data.closed,preview=data.preview,s=data.symbol;
-      ctx.clearRect(0,0,canvas.width,canvas.height);ctx.font='12px Segoe UI';const box={left:70,right:90,top:64,bottom:42},w=canvas.width-box.left-box.right,h=canvas.height-box.top-box.bottom;
-      ctx.fillStyle='#8da0ad';ctx.fillText(`${chosen}  ${tf}  ${s.bias||'NEUTRAL'}  ·  ${mode}`,18,25);const q=state.feed_quality?.[`${chosen}:${tf}`];ctx.fillText(`feed ${q?.transport||state.transport_state||'WAITING'} · closed ${candles.length} · preview age ${age(q?.preview_age_ms)}`,18,46);
-      if(!candles.length)return;const all=preview?[...candles,preview]:candles;let lo=Math.min(...all.map(v=>number(v.low))),hi=Math.max(...all.map(v=>number(v.high)));
-      const levels=[];if(s.zone)levels.push(s.zone.lower,s.zone.upper,s.zone.invalidation);const candidate=(state.candidates||[]).find(v=>v.symbol===chosen);if(candidate)levels.push(candidate.entry_reference,candidate.stop_reference,candidate.target_reference);if(levels.length){lo=Math.min(lo,...levels);hi=Math.max(hi,...levels)}
-      const pad=(hi-lo)*.08||1;lo-=pad;hi+=pad;const minT=all[0].open_time,maxT=Math.max(...all.map(v=>v.close_time));const x=t=>box.left+(Math.max(minT,Math.min(maxT,t))-minT)/Math.max(1,maxT-minT)*w;const y=v=>box.top+(hi-v)/(hi-lo)*h;
-      ctx.strokeStyle='#253642';ctx.fillStyle='#8da0ad';for(let i=0;i<=5;i++){const yy=box.top+i*h/5;ctx.beginPath();ctx.moveTo(box.left,yy);ctx.lineTo(box.left+w,yy);ctx.stroke();ctx.fillText(price(hi-i*(hi-lo)/5),box.left+w+8,yy+4)}
-      for(let i=0;i<=4;i++){const xx=box.left+i*w/4,t=minT+i*(maxT-minT)/4;ctx.beginPath();ctx.moveTo(xx,box.top);ctx.lineTo(xx,box.top+h);ctx.stroke();ctx.fillText(new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),xx-20,canvas.height-14)}
-      const bodyW=Math.max(2,Math.min(8,w/all.length*.55));all.forEach(v=>{const xx=x((v.open_time+v.close_time)/2),color=v.closed?(v.close>=v.open?'#48d597':'#ff6f7d'):'#f5b84b';ctx.strokeStyle=color;if(!v.closed)ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xx,y(v.high));ctx.lineTo(xx,y(v.low));ctx.stroke();ctx.fillStyle=color;ctx.fillRect(xx-bodyW/2,Math.min(y(v.open),y(v.close)),bodyW,Math.max(1,Math.abs(y(v.open)-y(v.close))));ctx.setLineDash([])});
-      if(preview){ctx.fillStyle='#f5b84b';ctx.fillText('LIVE / UNCONFIRMED',canvas.width-235,25)}
-      if(tf==='4h')for(const pivot of s.pivots||[]){if(pivot[3]>=minT&&pivot[3]<=maxT)drawTriangle(ctx,x(pivot[3]),y(pivot[2]),pivot[0]==='HIGH'?'#ff6f7d':'#48d597')}
-      if(tf==='1h'&&s.impulse){ctx.strokeStyle='#57d9e8';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x(s.impulse.start_time),y(s.impulse.origin));ctx.lineTo(x(s.impulse.end_time),y(s.impulse.end));ctx.stroke();ctx.lineWidth=1;ctx.fillStyle='#57d9e8';ctx.fillText('H1 IMPULSE',x(s.impulse.end_time)-70,y(s.impulse.end)-9)}
-      if(s.zone){const z=s.zone,zx=x(z.created_at),zend=x(Math.min(z.expires_at,maxT));ctx.fillStyle='#f5b84b22';ctx.fillRect(zx,y(z.upper),Math.max(2,zend-zx),Math.max(3,y(z.lower)-y(z.upper)));ctx.strokeStyle='#f5b84b';ctx.setLineDash([5,4]);ctx.strokeRect(zx,y(z.upper),Math.max(2,zend-zx),Math.max(3,y(z.lower)-y(z.upper)));ctx.setLineDash([]);ctx.fillStyle='#f5b84b';ctx.fillText(`ZONE ${z.state}`,zx+4,y(z.upper)-7)}
-      if(s.trigger&&s.trigger.time>=minT&&s.trigger.time<=maxT){const tx=x(s.trigger.time),ty=y(s.trigger.price);ctx.fillStyle='#57d9e8';ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.fill();ctx.fillText('TRIGGER',tx+8,ty-8)}
-      if(candidate){for(const [label,value,color] of [['ENTRY',candidate.entry_reference,'#57d9e8'],['STOP',candidate.stop_reference,'#ff6f7d'],['TARGET',candidate.target_reference,'#48d597']]){ctx.strokeStyle=color;ctx.setLineDash([6,4]);ctx.beginPath();ctx.moveTo(x(candidate.decision_time),y(value));ctx.lineTo(box.left+w,y(value));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=color;ctx.fillText(label,box.left+w-52,y(value)-5)}const outcome=state.outcomes?.[candidate.candidate_id];if(outcome){ctx.fillStyle='#e8f0f5';ctx.fillText(`${outcome.status} · MFE ${price(outcome.mfe)}R · MAE ${price(outcome.mae)}R · final ${price(outcome.final_r)}R`,box.left+8,box.top+h-10)}}
-    }
-    function addMetric(label,value){const div=document.createElement('div');div.className='metric';text(div,label);const strong=document.createElement('b');strong.textContent=String(value??'-');div.appendChild(strong);byId('metrics').appendChild(div)}
-    function render(){
-      const s=state.symbols?.[chosen]||{},q=state.feed_quality?.[`${chosen}:${tf}`],transport=state.transport_state||'STALE';byId('connection').textContent=transport;byId('connection').className=`badge ${transport.startsWith('LIVE')||transport==='REPLAY'?'bull':transport==='DEGRADED'?'warn':'danger'}`;byId('wsState').textContent=`WS ${state.ws_state||'-'}`;
-      clear(byId('metrics'));addMetric('Bias',s.bias||'NEUTRAL');addMetric('Impulse',s.impulse?'CONFIRMED':'-');addMetric('Zone',s.zone?.state||'-');addMetric('Trigger',s.trigger?.reason_code||'NO_TRIGGER');addMetric('Candidates',state.candidates?.length||0);addMetric('Outcomes',Object.keys(state.outcomes||{}).length);
-      const symbolBox=byId('symbols');clear(symbolBox);for(const [key,value] of Object.entries(state.symbols||{})){const badge=document.createElement('span');badge.className=`badge ${value.bias==='BULLISH'?'bull':value.bias==='BEARISH'?'bear':''}`;badge.textContent=`${key} ${value.status||value.bias||'-'}`;symbolBox.appendChild(badge)}
-      const tasks=Object.values(state.task_health||{}),healthy=tasks.filter(v=>v.status==='RUNNING').length,rt=state.rest_telemetry||{};byId('runtime').textContent=`feed ${q?.transport||'-'} · success age ${age(q?.success_age_ms)} · preview age ${age(q?.preview_age_ms)} · lag ${q?.lag_bars??'-'} bars\nbrowser message age ${browserLastMessage?age(Date.now()-browserLastMessage):'-'} · tasks ${healthy}/${tasks.length}\nREST requests ${rt.requests_total??'-'} · used weight ${rt.used_weight_1m??'-'} / ${rt.weight_limit_1m??'-'} · remaining ${rt.remaining_weight_1m??'-'}`;
-      const events=byId('events');clear(events);for(const event of (state.events||[]).slice(0,30)){const row=document.createElement('div');row.className='event';row.textContent=`${new Date(event.time).toLocaleTimeString()} · ${event.symbol||'-'} · ${event.to||'-'} · ${event.reason_code||'-'}`;events.appendChild(row)}draw()
-    }
-    async function load(){try{const response=await fetch('/api/state'),payload=await response.json();clearObject(liveState);Object.assign(liveState,payload);const keys=Object.keys(payload.symbols||{}),select=byId('symbol');if(keys.length&&!select.options.length){for(const key of keys){const option=document.createElement('option');option.value=key;option.textContent=key;select.appendChild(option)}}if(mode==='LIVE')selectState(liveState);const accountResponse=await fetch('/api/account'),account=await accountResponse.json(),node=byId('account');node.textContent=`auth ${account.auth}\nposition mode ${account.position_mode??'-'} · positions ${account.positions??'-'}\nregular ${account.regular_orders??'-'} · conditional ${account.conditional_orders??'-'} · execution algo ${account.execution_algo_orders??'-'} · total ${account.total_orders??'-'}\nsnapshot age ${age(account.snapshot_age_ms)}\navailable balance ${price(account.available_balance)}\n${account.warning||account.note||''}`;}catch(error){byId('connection').textContent='DISCONNECTED'}}
-    function connectWs(){const protocol=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${protocol}://${location.host}/ws`);socket.onopen=()=>{retry=1000;socket.send('hello')};socket.onmessage=event=>{browserLastMessage=Date.now();const payload=JSON.parse(event.data);clearObject(liveState);Object.assign(liveState,payload);if(mode==='LIVE')selectState(liveState)};socket.onerror=()=>socket.close();socket.onclose=()=>{const delay=retry+Math.random()*Math.min(1000,retry*.2);setTimeout(connectWs,delay);retry=Math.min(30000,retry*2)}}
-    connectWs();load().then(()=>{if(new URLSearchParams(location.search).get('mode')==='replay')byId('replayButton').click()});setInterval(load,15000);setInterval(render,1000);
-  </script>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">S</span><div>BINANCE <strong>SNIPER</strong><small>USDⓈ-M / OBSERVATION TERMINAL</small></div></div>
+  <div class="workspace-name">WORKSPACE <b>01</b><span> / INTRADAY</span></div>
+  <div class="top-status"><span id="connection" role="status">MENGHUBUNGKAN</span><time id="clock">— WIB</time></div>
+</header>
+<nav class="toolbar" aria-label="Kontrol terminal">
+  <div class="mode-group"><button id="liveButton" class="selected">LIVE</button><button id="replayButton">REPLAY</button></div>
+  <span class="divider"></span><label class="sr-only" for="symbol">Simbol</label><select id="symbol"></select>
+  <div id="timeframes" class="button-group" aria-label="Timeframe"><button data-tf="5m" class="selected">M5</button><button data-tf="15m">M15</button><button data-tf="1h">H1</button><button data-tf="4h">H4</button></div>
+  <span class="divider"></span><button id="crosshair" aria-pressed="true" title="Aktifkan crosshair">⊕ Crosshair</button><button id="zoomIn" aria-label="Perbesar chart">＋</button><button id="zoomOut" aria-label="Perkecil chart">−</button><button id="resetChart">Reset view</button>
+  <span class="toolbar-note">Keputusan dari candle tertutup</span>
+</nav>
+<div id="modeBanner" class="mode-banner" hidden>CONTOH SINTETIS · bukan transaksi market <button id="replayPlay">Putar</button><button id="replayStep">+1 candle</button><label for="replayRange">Urutan</label><input id="replayRange" type="range" min="0" max="5" value="0"><span id="replayProgress"></span></div>
+<main class="workspace">
+  <aside class="market pane">
+    <div class="pane-title"><h2>MARKET WATCH</h2><span id="pairCount">— PAIRS</span></div>
+    <div class="watch-head"><span>SYMBOL / STAGE</span><span>LAST</span></div>
+    <div id="watchlist"></div>
+    <div class="market-summary"><span class="eyebrow">SCANNER</span><b id="scanSummary">Memuat market…</b><p>Harga terakhir dari candle. Urutan mengikuti tahap setup.</p><div class="legend"><span class="up">↑ Long</span><span class="down">↓ Short</span><span class="muted">• Netral</span></div></div>
+    <div class="market-bottom"><span>BINANCE FUTURES</span><span id="feedCount">— / — feed</span></div>
+  </aside>
+  <section class="chart-pane pane">
+    <div class="chart-heading"><div><h2 id="chartSymbol">BTCUSDT <span>M5</span></h2><div id="quote" class="quote">—</div></div><div class="chart-state"><span id="biasBadge">NEUTRAL</span><small id="barCountdown">—</small></div></div>
+    <div id="chartWrap"><canvas id="chart" aria-label="Chart candle dengan zona dan level referensi"></canvas><div id="chartEmpty" class="chart-empty" hidden>Belum ada candle untuk pilihan ini.</div><div id="chartWatermark"></div></div>
+    <div class="chart-caption"><span id="ohlc">Gerakkan crosshair untuk membaca OHLC</span><span id="chartDataStatus">—</span></div>
+    <div id="contextStrip" class="context-strip" aria-label="Konteks multi timeframe"></div>
+  </section>
+  <aside class="decision pane">
+    <div class="pane-title"><h2>SNIPER / DECISION</h2><span id="stageCode">WAITING</span></div>
+    <div class="decision-lead"><span class="eyebrow">STATUS SETUP</span><h3 id="decisionTitle">Menunggu data mesin</h3><p id="decisionReason">Menghubungkan market dan pembacaan timeframe.</p></div>
+    <div id="gates" class="gates"></div>
+    <div class="level-section"><div class="section-label">AREA & REFERENSI <span id="setupKind">—</span></div><dl id="levels"></dl><small id="setupMeta"></small></div>
+    <div id="outcomeBox" class="outcome-box" hidden></div>
+    <p class="read-only-note">OBSERVATION ONLY · sinyal dan level referensi, tanpa pengiriman order.</p>
+  </aside>
+</main>
+<section class="terminal pane">
+  <div class="terminal-bar"><div role="tablist" aria-label="Panel terminal"><button data-tab="journal" role="tab" aria-selected="true" class="selected">Journal</button><button data-tab="setups" role="tab" aria-selected="false">Setup history <span id="candidateCount">0</span></button><button data-tab="health" role="tab" aria-selected="false">Connection</button><button data-tab="account" role="tab" aria-selected="false">Account · read-only</button></div><span id="terminalContext">—</span></div>
+  <div id="terminalBody" class="terminal-body" role="tabpanel"></div>
+</section>
+<footer class="statusbar"><span id="footerMode">LIVE OBSERVER</span><span id="footerMessage">Menunggu snapshot</span><span id="snapshotAge">DATA —</span></footer>
 </body>
 </html>

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 from binance_sniper.domain import Candle
@@ -81,7 +81,8 @@ class ClosedBarCache:
             if candle.close_time <= cutoff:
                 self._accept(candle)
             else:
-                self.preview = candle
+                self.preview = replace(candle, closed=False)
+                self.quality.last_preview_at = now or 0
         self.quality.status = "REST_WARM" if parsed else "STALE"
         self.quality.transport = "REST_WARM" if parsed else "STALE"
         self.quality.valid_rows += len(parsed)
@@ -110,6 +111,8 @@ class ClosedBarCache:
             self.quality.status = "RECOVERING"
             self.quality.transport = "RECOVERING"
         if not candle.closed:
+            if candle.open_time <= self._last_open or (self.preview and candle.open_time < self.preview.open_time):
+                return False
             self.preview = candle
             self.quality.last_preview_at = now
             return False
@@ -132,7 +135,7 @@ class ClosedBarCache:
                 if candle.open_time > self._last_open:
                     changed = self._accept(candle, source="REST") or changed
             else:
-                self.preview = candle
+                self.preview = replace(candle, closed=False)
                 self.quality.last_preview_at = now
         self.quality.valid_rows += len(parsed)
         self.quality.last_valid_payload_at = now
@@ -165,6 +168,9 @@ class ClosedBarCache:
         self.quality.transport = "STALE"
 
     def _accept(self, candle: Candle, source: str = "REST") -> bool:
+        if self.preview is not None and self.preview.open_time <= candle.open_time:
+            self.preview = None
+            self.quality.last_preview_at = 0
         if candle.open_time < self._last_open:
             self.quality.out_of_order += 1
             return False

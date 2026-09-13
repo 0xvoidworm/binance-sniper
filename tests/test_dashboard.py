@@ -13,7 +13,9 @@ def test_dashboard_smoke():
     client = TestClient(build_app(State()))
     response = client.get('/')
     assert response.status_code == 200
-    assert 'BINANCE SNIPER' in response.text
+    assert 'SNIPER / DECISION' in response.text
+    for asset in ('terminal.js', 'terminal-model.js', 'terminal.css'):
+        assert client.get('/assets/' + asset).status_code == 200
     replay=client.get('/api/replay')
     assert replay.status_code==200
     payload=replay.json()

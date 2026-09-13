@@ -13,7 +13,10 @@ Updated: 2026-09-13
 - [x] Supervised task health registry and server-time refresh
 - [x] Exact PID/port/project ownership scripts and stale-lock recovery
 - [x] Dark dashboard with live/replay modes, axes, time/price overlays, freshness, account age, task, and rate status
+- [x] MT5/Bloomberg-inspired local terminal with Market Watch, chart crosshair/zoom/pan, decision gates, and terminal tabs
+- [x] Browser disconnect/freshness protection, matching candidate/zone overlays, REST preview finality, and dataset-specific symbol selection
+- [x] Synthetic step/play replay through six causal frames with isolated account display
 - [ ] Strategy edge/event study and profitability validation
 - [ ] Trading execution (intentionally absent)
 
-Latest offline verification: `44 passed`, one third-party Starlette/AnyIO deprecation warning, and clean `pip check`. See `TEST_RESULTS.md` for runtime evidence.
+Latest offline verification: `48 passed` Python tests plus `8 passed` JavaScript model tests, one third-party Starlette/AnyIO deprecation warning, and clean `pip check`. See `TEST_RESULTS.md` for runtime evidence.

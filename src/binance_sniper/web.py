@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from functools import lru_cache
 
@@ -29,6 +30,7 @@ def build_app(state):
                 await state.stop()
 
     app = FastAPI(title="Binance Sniper", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app.mount("/assets", StaticFiles(directory=Path(__file__).resolve().parents[2] / "web" / "assets"), name="assets")
 
     @app.get("/", response_class=HTMLResponse)
     async def index():

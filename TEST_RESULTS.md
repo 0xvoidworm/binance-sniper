@@ -4,7 +4,21 @@ Updated: 2026-09-13
 
 Offline command: `.\.venv\Scripts\python.exe -m pytest -q`
 
-Result: `44 passed`, with one third-party Starlette `TestClient` / AnyIO alias deprecation warning. Project lifespan warnings are gone. `pip check` reports no broken requirements.
+Result after terminal UI patch: `48 passed`, with one third-party Starlette `TestClient` / AnyIO alias deprecation warning. Project lifespan warnings are gone. `pip check` reports no broken requirements. JavaScript: `node --test tests/terminal-model.test.cjs` reports `8 passed`; `node --check web/assets/terminal.js` succeeds.
+
+Terminal-specific verification:
+
+- REST warmup/update preview is `closed=false`, remains outside the decision cache, and is removed when finalized. Delayed WS previews cannot resurrect a finalized candle.
+- Python decision explanations expose the actual neutral-H4 blocker and preserve dependency states. No strategy threshold was changed.
+- Six independent replay frames progress from ARMED to TRIGGERED and four completed outcome candles. Each frame excludes later candles/events.
+- JavaScript tests cover offline/stale snapshots, HTTP fallback, replay symbol selection, zone-matched candidate selection, explicit archive selection, and missing-value freshness/distance behavior.
+- Isolated browser: ETHUSDT → REPLAY selected BTCUSDT automatically; step exposed TRIGGERED with matching candidate/zone and zero outcome bars; play ended at COMPLETED with four bars and gross final 1.6R in the synthetic fixture.
+- Browser offline emulation retained DISCONNECTED through repeated renders, with “Data belum siap” and a cached-snapshot chart label. No Binance service network setting was changed.
+- Desktop and 390px mobile visual checks verified the terminal layout. Mobile document width stayed 390px; chart bitmap matched CSS size × devicePixelRatio. Fixed an intrinsic canvas sizing issue found during resize QA.
+- No application console warnings/errors during normal live/replay inspection. Expected network errors occurred only during explicit offline emulation.
+- The Windows Computer Use helper stopped native browser control because it could not confidently determine the current browser URL. Native control was not retried after that stop. Visual and interaction checks were completed in the separate browser debugging context; the user's existing tab may still require manual refresh.
+
+Runtime after this patch: verified owner PID 8768, 24/24 LIVE_REST_FALLBACK feeds, lag 0, 27/27 tasks RUNNING, account CONNECTED, all order counts 0. This is a point-in-time check; the earlier Phase 1D soak below remains historical evidence rather than a new multi-day soak.
 
 Semantic replay result:
 

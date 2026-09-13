@@ -11,6 +11,7 @@ from binance_sniper.analysis.triggers import detect as detect_trigger
 from binance_sniper.analysis.zones import build as build_zone
 from binance_sniper.domain import Candidate, Zone, ZoneState
 from binance_sniper.market.mtf_cache import MtfCache
+from binance_sniper.presentation import decision_view
 
 
 TERMINAL_ZONE_STATES = {ZoneState.COMPLETED, ZoneState.INVALIDATED, ZoneState.EXPIRED}
@@ -187,7 +188,7 @@ class Scanner:
 
         if zone is None:
             visible = [item for item in self.ledger.zones.values() if item.symbol == symbol]
-            zone = max(visible, key=lambda item: item.created_at) if visible else None
+            zone = max(visible, key=lambda item: (item.state not in TERMINAL_ZONE_STATES, item.created_at)) if visible else None
         if ledger_changed:
             self.ledger.save()
 
@@ -205,6 +206,7 @@ class Scanner:
             "symbol": symbol, "bias": bias, "efficiency": efficiency,
             "pivots": pivots, "impulse": impulse, "zone": asdict(zone) if zone else None,
             "trigger": trigger, "status": status, "last_update": int(time.time() * 1000),
+            "decision": decision_view(bias, efficiency, impulse, zone, m5, self.settings, len(h4)),
         }
 
     def evaluate_all(self) -> None:
@@ -230,5 +232,6 @@ class Scanner:
             "symbols": self.latest, "charts": charts, "candidates": candidates,
             "outcomes": {**self.horizon.active, **self.horizon.completed},
             "events": list(reversed(self.ledger.event_ledger[-200:])),
+            "zones": {key: asdict(zone) for key, zone in self.ledger.zones.items()},
             "feed_quality": self.cache.quality(), "reconnects": self.reconnects,
         }

@@ -21,7 +21,7 @@ def test_source_has_no_duplicate_definitions_or_statement_after_return():
 
 
 def test_dashboard_has_no_fixed_trigger_coordinate_or_external_innerhtml():
-    html=Path('web/index.html').read_text(encoding='utf-8')
+    html=Path('web/index.html').read_text(encoding='utf-8') + Path('web/assets/terminal.js').read_text(encoding='utf-8')
     assert "c.width*.72,185" not in html
     assert '.innerHTML' not in html
     assert 'time->x' not in html  # mappings are executable functions, not placeholder prose
