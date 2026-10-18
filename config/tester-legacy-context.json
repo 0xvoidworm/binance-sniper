@@ -1,0 +1,13 @@
+{
+  "engine_id": "legacy-sniperfx",
+  "expected_expert": "SniperFX",
+  "purpose": "LEGACY_PARSER_CHECK",
+  "version": null,
+  "run_label": "Arsip EURUSD - validasi parser, bukan kandidat",
+  "broker_timezone": null,
+  "tester_model": null,
+  "execution_delay": null,
+  "cost_model": "Reported commission 0; historical execution costs not independently verified",
+  "dataset_id": null,
+  "randomizer": null
+}

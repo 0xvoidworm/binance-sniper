@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="id"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Channel Desk · Live Observer</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/tester-terminal.css"><link rel="stylesheet" href="/assets/observer.css">
+  <script defer src="/assets/observer-model.js"></script><script defer src="/assets/observer.js"></script>
+</head><body>
+<header><a class="brand" href="/observe">C<span>/</span>D <strong>CHANNEL DESK<small>BINANCE USD-M / LIVE OBSERVER</small></strong></a>
+  <nav aria-label="Workspace"><a class="active" href="/observe">OBSERVASI LIVE</a><a href="/tester">BUKTI MT5</a><a href="/market">ARSIP RANGE</a></nav>
+  <span class="mode">READ-ONLY · TANPA ORDER BINANCE</span></header>
+<div class="ticker"><b id="connection">MENGHUBUNGKAN…</b><span id="network">Data publik / menunggu</span><span id="clock">— WIB</span></div>
+<main class="observer-layout">
+  <aside class="panel watchlist"><div class="heading"><h1>MARKET / MODEL</h1><span>H4</span></div><div id="models"></div>
+    <div class="sidebar-note"><b>Mesin sedang mengamati.</b><p>Harga diperbarui terus. Keputusan kanal menunggu candle H4 selesai.</p><p>20/10 dan 55/20 ditampilkan setara. Keduanya belum lolos evaluasi strategi.</p></div>
+    <dl class="session"><dt>Mulai observasi</dt><dd id="started">—</dd><dt>Input baru H4</dt><dd id="bars">0</dd><dt>Rekonstruksi terlambat</dt><dd id="delayed">0</dd><dt>Order ke Binance</dt><dd>DINONAKTIFKAN</dd></dl>
+  </aside>
+  <section class="desk">
+    <section class="panel runbar"><div><p class="eyebrow" id="modelName">CHANNEL / OBSERVER</p><h2><span id="symbol">—</span> <span id="price">—</span></h2><p id="quoteAge">Menunggu harga futures aktual.</p></div><div class="countdown"><small>CANDLE H4 SELESAI DALAM</small><b id="countdown">—</b><span id="nextClose">— WIB</span></div></section>
+    <div class="signal-strip" id="signal">Memuat kondisi engine…</div>
+    <section class="metrics"><div><small>BREAKOUT BUY · CLOSE DI ATAS</small><b id="entryHigh">—</b><span>Kanal dari candle selesai</span></div><div><small>BREAKOUT SELL · CLOSE DI BAWAH</small><b id="entryLow">—</b><span>Bukan instruksi order</span></div><div><small>POSISI MODEL · TERAKHIR TERCATAT</small><b id="position">—</b><span id="positionDetail">Belum ada posisi model</span></div><div><small>STOP MODEL BERIKUTNYA</small><b id="stop">—</b><span id="atr">ATR(20) · —</span></div></section>
+    <section class="panel chart-panel"><div class="heading"><h2>PRICE / CHANNEL LEVELS</h2><span id="chartInfo">H4 · preview terpisah</span></div><div class="chart-wrap observer-chart"><canvas id="marketChart" aria-label="Candlestick futures H4 dan level kanal untuk candle berjalan"></canvas><div id="chartEmpty">Menunggu data valid.</div></div><div class="caption"><span>Hijau: batas buy · merah: batas sell · kuning: stop model</span><span>Garis level hanya untuk bar berjalan; bukan kanal historis.</span></div></section>
+    <section class="panel"><div class="heading"><h2>MODEL LEDGER</h2><span id="tradeCount">0 TRADE MODEL</span></div><div class="table-scroll"><table><thead><tr><th>Dicatat (WIB)</th><th>Arah</th><th>Entry model</th><th>Exit model</th><th>Alasan exit</th><th>Indeks sebelum funding</th><th>Asal</th></tr></thead><tbody id="ledger"><tr><td colspan="7">Belum ada trade model setelah aktivasi. Tidak membuat transaksi historis saat startup.</td></tr></tbody></table></div></section>
+    <div class="observer-notes"><b>OBSERVASI EKSPERIMENTAL — BUKAN EKSEKUSI LIVE</b><p>Fill next-open dan stop dihitung dari OHLC, baru dicatat saat H4 selesai. Posisi di atas adalah kondisi model pada close terakhir; bukan fill intrabar atau posisi akun.</p><p>Fee 5 bps/sisi + slippage 2 bps/sisi diasumsikan. Funding live belum lengkap: net lengkap tidak ditampilkan. Indeks bukan dolar, return akun, atau bukti profit.</p><p id="integrity">Identitas engine dan input tersimpan untuk restart.</p></div>
+  </section>
+</main><footer><span id="updated">Menunggu snapshot</span><span>NO LIVE EXECUTION · NO ACCOUNT MUTATION</span><span id="health">—</span></footer>
+</body></html>

@@ -1,0 +1,25 @@
+{
+  "mode": "paper",
+  "market": "usdm_linear_one_way",
+  "symbol": "SYNTHUSDT",
+  "capital": "1000",
+  "risk_per_trade": "10",
+  "max_notional": "500",
+  "max_daily_loss": "25",
+  "max_total_loss": "50",
+  "fee_bps": "5",
+  "slippage_bps": "10",
+  "max_spread_bps": "25",
+  "max_quote_age_ms": 5000,
+  "order_timeout_ms": 2000,
+  "protection_timeout_ms": 1000,
+  "filters": {
+    "min_price": "0.01",
+    "max_price": "1000000",
+    "tick_size": "0.01",
+    "min_qty": "0.001",
+    "max_qty": "1000",
+    "step_size": "0.001",
+    "min_notional": "5"
+  }
+}

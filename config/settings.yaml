@@ -3,11 +3,12 @@ app:
   port: 8765
   log_level: INFO
 binance:
+  public_dns_fallback: true
   rest_base: https://fapi.binance.com
   websocket_base: wss://fstream.binance.com/stream
   symbols: [BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT]
   timeframes: [4h, 1h, 15m, 5m]
-  warmup_limit: 220
+  warmup_limit: 400
   reconnect_max_seconds: 60
   ws_silent_seconds: 15
   rest_poll_seconds: 5

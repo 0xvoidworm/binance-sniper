@@ -72,7 +72,7 @@ Langkah berikutnya memerlukan hipotesis sebab-akibat baru dan rencana validasi y
 - Dataset: `binance-1750377600000-1781481600000-v1`.
 - Protocol SHA-256: `a570409b895121e151a5790a63345f16cf8711945aa2eb784b22cdfabbabddaf`.
 - Config SHA-256: `8e5f7eedaba88cb2b8942ae905c311de4d70a375d4392f45ab568d0744f9e17a`.
-- JSON ekspor: `C:\Users\yuri\Desktop\Workspace\outputs\binance-sniper-phase3-360d.json`.
+- JSON ekspor: `%USERPROFILE%\Desktop\Workspace\outputs\binance-sniper-phase3-360d.json`.
 - JSON SHA-256: `29c8a64533de478397822e5e889c10765dc3d89dc88663aaadfad20aaf75fd13`.
 
 Hash sumber per file dan manifest feed/funding ada di JSON. Trial sebelumnya `lab-6b33792f035df1f24d6cbbac` dipertahankan; pengulangan menambahkan binding config yang kurang pada provenance, bukan menyesuaikan strategi. Validasi, baseline dan semua hasil variasi identik (ID run berbeda). Jangan menghitungnya sebagai dua sampel independen.

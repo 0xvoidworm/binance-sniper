@@ -1,0 +1,13 @@
+{
+  "engine_id": "jimmy-range-122237",
+  "expected_expert": "Range Breakout EA with Range Filters",
+  "purpose": "COMPATIBILITY",
+  "version": "5.20",
+  "run_label": "FBS compatibility - settings not yet captured",
+  "broker_timezone": null,
+  "tester_model": null,
+  "execution_delay": null,
+  "cost_model": null,
+  "dataset_id": null,
+  "randomizer": null
+}

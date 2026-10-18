@@ -11,12 +11,14 @@ from binance_sniper.binance.market_stream import MarketStream
 from binance_sniper.binance.private_readonly import PrivateReadOnlyClient
 from binance_sniper.binance.public_rest import BinancePublicRest
 from binance_sniper.config import Settings
-from binance_sniper.engine import Scanner
+from binance_sniper.reference.live import MarketView, ReferenceMonitor
 from binance_sniper.market.mtf_cache import MtfCache
+from binance_sniper.market.bars import INTERVAL_MS
 from binance_sniper.secrets import load_credentials
 from binance_sniper.web import build_app
 from binance_sniper.research.recorder import ResearchRecorder
 from binance_sniper.strategy_lab.live import ShadowLab
+from binance_sniper.round01.observer import ChannelObserver
 
 
 TaskFactory = Callable[[], Awaitable[None]]
@@ -25,14 +27,14 @@ TaskFactory = Callable[[], Awaitable[None]]
 class Runtime:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.cache = MtfCache(settings.symbols, settings.timeframes)
+        self.cache = MtfCache(settings.symbols, settings.timeframes, capacity=max(400, settings.warmup_limit))
         project_root = Path(__file__).resolve().parents[2]
-        self.scanner = Scanner(self.cache, settings, project_root / "state")
+        self.scanner = MarketView(self.cache, settings)
         self.clients: set = set()
         self.account = {"auth": "AUTH_UNAVAILABLE", "note": "Private read-only panel unavailable; public scanner may continue."}
         self.account_success_at = 0
         self.account_error_class: str | None = None
-        self.public = BinancePublicRest(settings.rest_base)
+        self.public = BinancePublicRest(settings.rest_base, dns_fallback=settings.public_dns_fallback)
         self.public_semaphore = asyncio.Semaphore(settings.rest_concurrency)
         self.stream = MarketStream(
             settings.websocket_base, settings.symbols, settings.timeframes,
@@ -54,6 +56,8 @@ class Runtime:
         self.lock_file = self.state_dir / "binance-sniper.lock"
         self.research = None
         self.lab = None
+        self.reference = None
+        self.observer = None
 
     def server_now(self) -> int:
         return int(time.time() * 1000) + self.server_offset_ms
@@ -118,8 +122,11 @@ class Runtime:
         cache = self.cache.caches[(symbol, timeframe)]
         now = self.server_now()
         try:
+            last = cache.values()[-1] if cache.values() else None
+            lag = max(0, (now - last.close_time) // INTERVAL_MS[timeframe]) if last else 0
+            limit = min(self.settings.warmup_limit, max(3, lag + 2))
             async with self.public_semaphore:
-                rows = await self.public.klines(symbol, timeframe, 3)
+                rows = await self.public.klines(symbol, timeframe, limit)
             changed = self.cache.update_rest(symbol, timeframe, rows, now)
             valid = cache.quality.last_success_at == now and cache.quality.last_error_class is None
             if not valid:
@@ -238,6 +245,7 @@ class Runtime:
             rest_telemetry=self.public.telemetry(), server_offset_ms=self.server_offset_ms,
             snapshot_at=int(time.time() * 1000),
             instrument_meta=self.instrument_meta,
+            reference=self.reference_snapshot(),
         )
         return snapshot
 
@@ -293,6 +301,8 @@ class Runtime:
                 self.research = None
 
     def research_snapshot(self) -> dict:
+        if self.reference is not None:
+            return {'status': 'ARCHIVED', 'reports': [], 'note': 'Phase 2 retired; original reports retained in research.sqlite3 and docs.'}
         snapshot = dict(self.research.snapshot) if self.research is not None else {"status":"STARTING", "reports":[]}
         health = self.task_health().get("research", {})
         if health.get("status") not in {None, "RUNNING"}:
@@ -317,6 +327,8 @@ class Runtime:
                 self.lab = None
 
     def lab_snapshot(self) -> dict:
+        if self.reference is not None:
+            return self.reference.archived
         result = dict(self.lab.snapshot) if self.lab is not None else {"status":"STARTING", "report":None, "shadow":{}}
         health = self.task_health().get("strategy-lab", {})
         result["task"] = health
@@ -329,6 +341,53 @@ class Runtime:
 
     def lab_events(self, trial: str, variant: str):
         return self.lab.events(trial, variant) if self.lab is not None else None
+
+    async def reference_loop(self) -> None:
+        try:
+            self.reference = ReferenceMonitor(self.state_dir, self.settings, self.server_now())
+            while not self.stopping:
+                self.reference.capture(self, self.server_now())
+                self._heartbeat('range-reference')
+                await asyncio.sleep(5)
+        finally:
+            if self.reference is not None:
+                self.reference.close()
+                self.reference = None
+
+    async def observer_loop(self) -> None:
+        try:
+            self.observer = ChannelObserver(self.state_dir / "channel-observer.sqlite3", self.server_now())
+            while not self.stopping:
+                self.observer.capture(self.cache, self.server_now())
+                self._heartbeat("channel-observer")
+                await asyncio.sleep(2)
+        finally:
+            if self.observer is not None:
+                self.observer.close()
+                self.observer = None
+
+    def observer_snapshot(self) -> dict:
+        result = self.observer.snapshot(self.cache, self.server_now()) if self.observer else {
+            "status": "STARTING", "rows": [], "execution": "DISABLED_NO_ORDER_ROUTER"}
+        result["task"] = self.task_health().get("channel-observer", {})
+        result["network"] = self.public.telemetry()
+        if result["task"].get("status") not in (None, "RUNNING"):
+            result["status"] = "DEGRADED"
+        return result
+
+    def reference_snapshot(self) -> dict:
+        result = dict(self.reference.snapshot) if self.reference is not None else {'status': 'STARTING', 'sessions': {}}
+        health = self.task_health().get('range-reference', {})
+        result['task'] = health
+        if health.get('status') not in {None, 'RUNNING'}:
+            result['status'] = health['status']
+        return result
+
+    def reference_chart(self, symbol, day, dataset=None):
+        result = self.reference.chart(symbol, day, dataset) if self.reference is not None else None
+        if result is not None:
+            result['instrument_meta'] = self.instrument_meta
+        return result
 
     @staticmethod
     def _pid_alive(pid: int) -> bool:
@@ -359,12 +418,11 @@ class Runtime:
         self._claim_instance()
         try:
             await self.warmup()
-            await self.load_account()
             self._spawn("market-stream", self.stream.run)
             self._spawn("account", self.account_refresh_loop)
             self._spawn("server-time", self.server_time_loop)
-            self._spawn("research", self.research_loop)
-            self._spawn("strategy-lab", self.lab_loop)
+            self._spawn("range-reference", self.reference_loop)
+            self._spawn("channel-observer", self.observer_loop)
             for symbol in self.settings.symbols:
                 for timeframe in self.settings.timeframes:
                     self._spawn(f"rest:{symbol}:{timeframe}", lambda s=symbol, tf=timeframe: self.rest_feed_loop(s, tf))

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Research Desk · MT5 Evidence</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/tester-terminal.css">
+  <script defer src="/assets/tester-model.js"></script><script defer src="/assets/tester-terminal.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="/">R<span>/</span>D <strong>RESEARCH DESK<small>MT5 / ORIGINAL EA EVIDENCE</small></strong></a><nav aria-label="Workspace"><a href="/observe">● OBSERVASI LIVE</a><a class="active" href="/tester">UJI EA MT5</a><a href="/market">BINANCE · MODEL LAMA</a></nav><span class="mode">TESTER ONLY · NO ORDERS</span></header>
+  <div class="ticker"><b>01 / VALIDATE BEFORE ADOPTING</b><span>EA asli → laporan MT5 → rekonsiliasi → perbandingan run</span><span id="connection" role="status">MENGHUBUNGKAN</span></div>
+  <main>
+    <aside class="panel candidate"><div class="heading"><h1>ENGINE CANDIDATE</h1><span>01</span></div><p class="eyebrow">MQL5 MARKET / 122237</p><h2>Range Breakout <br>with Range Filters</h2><p class="author">Jimmy Peter Eriksson</p><div class="candidate-version"><b>v5.20</b><span>Versi yang diaudit<br>14 September 2026</span></div>
+      <a class="source" href="https://www.mql5.com/en/market/product/122237" target="_blank" rel="noopener noreferrer">Buka sumber resmi ↗</a>
+      <dl><dt>Target uji</dt><dd>EA asli di MT5</dd><dt>Broker pembanding</dt><dd>IC Markets</dd><dt>Terminal lokal teramati</dt><dd>FBS</dd><dt>Mode lokal</dt><dd>Uji kompatibilitas</dd><dt>Status profitabilitas</dt><dd class="amber">Belum terbukti</dd></dl>
+      <div class="note">Bukan port strategi ke Binance. Perbedaan broker, versi, setting, dan data tetap dicatat.</div>
+      <div class="heading subheading"><h2>DATA SOURCES</h2></div><div class="source-row"><i></i><span>MT5 tester<small>Laporan lokal yang diimpor</small></span></div><div class="source-row dim"><i></i><span>Binance market & akun<small>Workspace terpisah · read-only</small></span></div>
+    </aside>
+    <section class="desk">
+      <section class="panel runbar"><div><p class="eyebrow">EXPERIMENT CONTROL</p><h2 id="headline">Memuat bukti lokal</h2><p id="headlineNote">Tidak ada angka profit sebelum laporan tersedia.</p></div><button id="refresh">↻ Refresh bukti</button></section>
+      <section class="pipeline" aria-label="Status pipeline"><div><span>01</span><b>Identitas EA</b><small>Produk & versi tercatat</small></div><div><span>02</span><b>Laporan lokal</b><small id="pipeReports">—</small></div><div><span>03</span><b>Rekonsiliasi</b><small id="pipeValid">—</small></div><div><span>04</span><b>Uji ulang</b><small id="pipeRepeat">Butuh ≥2 run sepadan</small></div></section>
+      <div class="runselect panel"><div class="tabs" role="group" aria-label="Jenis bukti"><button id="candidateTab" class="selected">KANDIDAT <span id="candidateCount">—</span></button><button id="legacyTab">ARSIP / UJI PARSER <span id="legacyCount">—</span></button></div><label for="run">Run</label><select id="run"><option value="">Belum ada laporan</option></select></div>
+      <div id="archiveBanner" class="banner" hidden>ARSIP SNIPERFX LAMA · Untuk memeriksa pipeline laporan, bukan hasil EA Jimmy.</div>
+      <div id="invalidBanner" class="banner danger" hidden>REKONSILIASI GAGAL · Angka di bawah hanya angka yang dilaporkan. Grafik saldo tidak ditampilkan.</div>
+      <section class="metrics" aria-label="Hasil terpilih"><div><small>NET PROFIT · LAPORAN</small><b id="net">—</b><span id="currency">Belum ada hasil</span></div><div><small>PROFIT FACTOR · LAPORAN</small><b id="pf">—</b><span>Keuntungan kotor / kerugian kotor</span></div><div><small>DD EQUITY MAKSIMAL</small><b id="dd">—</b><span>Ringkasan MT5, bukan grafik equity</span></div><div><small>TRADES / DEALS</small><b id="trades">—</b><span id="period">Periode belum tersedia</span></div></section>
+      <section class="panel chart-panel"><div class="heading"><h2>BALANCE / REALIZED</h2><span id="chartUnit">TIDAK ADA DATA</span></div><div class="chart-wrap"><canvas id="balanceChart" aria-label="Saldo laporan per deal; bukan equity" hidden></canvas><div id="emptyChart"><span>∅</span><h3>Belum ada hasil uji EA ini.</h3><p>Grafik muncul dari deal laporan MT5 yang lolos rekonsiliasi.<br>Tidak memakai kurva contoh atau hasil simulasi Binance.</p></div></div><div class="caption"><span id="chartReadout">Waktu broker belum dikonversi ke WIB.</span><span>Equity curve / candle / zona: tidak tersedia dari HTML ini</span></div></section>
+      <section class="panel evidence"><div class="heading"><h2>PROVENANCE & DATA QUALITY</h2><span id="validation">NO REPORT</span></div><div class="evidence-columns"><dl id="provenance"><dt>Hasil kandidat lokal</dt><dd>Belum tersedia</dd></dl><div><h3>BATAS BUKTI</h3><ul id="warnings"><li>Riwayat publik bukan hasil uji mesin ini di akun lo.</li><li>Uji kompatibilitas FBS tidak sama dengan replikasi IC Markets.</li><li>Laporan valid tidak otomatis berarti strategi layak live.</li></ul></div></div></section>
+      <section class="panel"><div class="heading"><h2>REPEAT RUN CHECK</h2><span>IDENTICAL SETUP / NO CHERRY-PICKING</span></div><div class="compare-controls"><label for="compareRun">Bandingkan run terpilih dengan</label><select id="compareRun"><option value="">Butuh run tambahan</option></select><button id="compare" disabled>Bandingkan</button></div><p id="comparison" class="compare-result">Versi, binary, setting, periode, data, biaya, dan kondisi tester harus sepadan. Konteks operator tetap bukan bukti independen.</p></section>
+      <section class="panel deals"><div class="heading"><h2>DEAL LEDGER</h2><span id="dealCount">0 BARIS TERSEDIA</span></div><div class="table-scroll"><table><thead><tr><th>Waktu broker</th><th>Deal</th><th>Symbol</th><th>Type / arah</th><th>Volume</th><th>Price</th><th>Commission</th><th>Swap</th><th>Profit</th><th>Balance</th></tr></thead><tbody id="deals"><tr><td colspan="10">Belum ada laporan terpilih.</td></tr></tbody></table></div><div class="pagination"><button id="previous" disabled>← Sebelumnya</button><span id="page">—</span><button id="next" disabled>Berikutnya →</button></div></section>
+    </section>
+  </main><footer><span>LOCAL EVIDENCE / READ-ONLY API</span><span id="updated">Belum diperbarui</span><span>NO LIVE EXECUTION</span></footer>
+</body></html>

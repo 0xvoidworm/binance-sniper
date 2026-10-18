@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Range Breakout · Reference Terminal</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/range-terminal.css">
+  <script defer src="/assets/range-model.js"></script>
+  <script defer src="/assets/range-terminal.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">R</span><div>RANGE <strong>BREAKOUT</strong><small>BINANCE FUTURES / MODEL TANPA ORDER</small></div></div>
+    <div class="mode-label">MODEL ONLY <span>· TANPA ORDER</span></div>
+    <div class="top-status"><span id="connection">MENGHUBUNGKAN</span><time id="clock">— WIB</time></div>
+  </header>
+  <div class="strategy-bar"><b>SATU RANGE. SATU BREAKOUT.</b><span>Tahan sampai stop atau akhir sesi.</span><span class="strategy-tag">NO FIXED TP</span><span class="strategy-tag">NO TRAILING</span></div>
+  <nav class="toolbar" aria-label="Kontrol chart">
+    <a href="/tester" style="color:#edb65c;padding:8px;font-size:11px">← UJI EA MT5</a><button id="liveButton" class="selected">MARKET LIVE</button><button id="demoButton">DEMO VISUAL</button>
+    <span class="divider"></span><label class="sr-only" for="symbol">Simbol</label><select id="symbol"></select>
+    <div class="tf-controls"><button data-tf="5m" class="selected">M5</button><button data-tf="15m">M15</button><button data-tf="1h">H1</button><button data-tf="4h">H4</button></div>
+    <button id="zoomIn" aria-label="Perbesar chart">＋</button><button id="zoomOut" aria-label="Perkecil chart">−</button><button id="resetChart">Fit session</button>
+    <span class="toolbar-note">Sinyal model dari M5 tertutup · timeframe lain untuk melihat chart</span>
+  </nav>
+  <div id="demoBanner" class="demo-banner" hidden>DEMO SINTETIS · BUKAN HASIL MARKET <button id="demoPlay">Putar</button><button id="demoNext">+1 tahap</button><input id="demoRange" aria-label="Tahap demo" type="range" min="0" max="5" value="0"><span id="demoProgress"></span></div>
+  <div id="historyBanner" class="demo-banner" hidden>REKONSTRUKSI HISTORIS · TERMASUK CANDLE SETELAH EXIT · BUKAN SINYAL LIVE <span id="historyDate"></span><button id="returnLive">Kembali ke market live</button></div>
+  <section class="session-strip" aria-label="Jadwal strategi UTC dan WIB">
+    <div><small>BENTUK RANGE</small><b>10:00–13:00 WIB</b><span>03:00–06:00 UTC</span></div>
+    <div><small>TUNGGU BREAKOUT</small><b>13:00–01:00 WIB</b><span>06:00–18:00 UTC · akhir WIB besok</span></div>
+    <div><small>PERTAHANKAN POSISI</small><b>Tidak dibatasi 4 candle</b><span>Stop tetap di sisi lain range</span></div>
+    <div><small>ACUAN</small><b>Aturan publik → adaptasi Binance</b><span>Belum terbukti profit pada akun ini</span></div>
+  </section>
+  <main class="workspace">
+    <aside class="pane market"><div class="pane-title"><h2>MARKET WATCH</h2><span id="pairCount">—</span></div><div id="watchlist"></div><div class="market-foot"><b>RANGE BREAKOUT / V1</b><p>Tidak memakai skor keyakinan, target R, atau filter pola lama.</p><span id="feedCount">— feed</span></div></aside>
+    <section class="pane chart-pane">
+      <div class="chart-heading"><div><h2 id="chartSymbol">—</h2><div id="quote">—</div></div><div class="chart-state"><span id="chartMode">MARKET / MODEL</span><small id="barCountdown">—</small></div></div>
+      <div id="chartWrap"><canvas id="chart" aria-label="Candlestick, range sesi, dan posisi model"></canvas><div id="chartEmpty" hidden>Belum ada data chart.</div><div id="chartWatermark"></div></div>
+      <div class="chart-caption"><span id="ohlc">Arahkan kursor untuk membaca candle</span><span id="chartLegend">Range · breakout · stop · akhir sesi</span></div>
+    </section>
+    <aside class="pane decision">
+      <div class="pane-title"><h2>RANGE / ENGINE</h2><span id="stageCode">STARTING</span></div>
+      <div class="decision-lead"><span class="eyebrow" id="origin">MODEL · BUKAN POSISI AKUN</span><h3 id="decisionTitle">Menunggu data mesin</h3><p id="decisionReason">Memuat range sesi dan kondisi market.</p></div>
+      <div id="progress" class="progress"></div>
+      <dl id="levels"></dl>
+      <div id="positionResult" class="position-result"></div>
+      <p class="model-note" id="modelNote">Adaptasi aturan publik, bukan EA vendor. Tidak ada order yang dikirim.</p>
+    </aside>
+  </main>
+  <section class="pane terminal">
+    <div class="terminal-bar"><div role="tablist" aria-label="Panel terminal"><button data-tab="positions" role="tab" aria-selected="true" class="selected">Sesi & posisi model</button><button data-tab="evidence" role="tab" aria-selected="false">Bukti & hasil</button><button data-tab="rules" role="tab" aria-selected="false">Aturan mesin</button><button data-tab="archive" role="tab" aria-selected="false">Arsip lama</button><button data-tab="health" role="tab" aria-selected="false">Koneksi</button><button data-tab="account" role="tab" aria-selected="false">Akun · read-only</button></div><span id="panelContext">MODEL / WIB</span></div>
+    <div id="terminalBody" class="terminal-body" role="tabpanel"></div>
+  </section>
+  <footer><span id="footerMode">REFERENCE MODEL · TANPA ORDER</span><span id="footerMessage">Menunggu snapshot…</span><span id="snapshotAge">—</span></footer>
+</body>
+</html>

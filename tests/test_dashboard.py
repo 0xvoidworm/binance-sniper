@@ -13,7 +13,13 @@ def test_dashboard_smoke():
     client = TestClient(build_app(State()))
     response = client.get('/')
     assert response.status_code == 200
-    assert 'SNIPER / DECISION' in response.text
+    assert 'RESEARCH DESK' in response.text
+    assert 'tester-terminal.js' in response.text
+    assert 'NO LIVE EXECUTION' in response.text
+    response = client.get('/market')
+    assert 'RANGE / ENGINE' in response.text
+    assert 'range-terminal.js' in response.text
+    assert 'NO FIXED TP' in response.text
     for asset in ('terminal.js', 'terminal-model.js', 'terminal.css'):
         assert client.get('/assets/' + asset).status_code == 200
     replay=client.get('/api/replay')

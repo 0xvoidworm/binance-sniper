@@ -35,6 +35,7 @@ class Settings:
     rest_concurrency: int = 6
     feed_stale_multiplier: int = 3
     websocket_renew_seconds: int = 82_800
+    public_dns_fallback: bool = False
 
     @classmethod
     def load(cls, path: Path) -> "Settings":
@@ -64,11 +65,14 @@ class Settings:
             rest_concurrency=int(binance.get("rest_concurrency", 6)),
             feed_stale_multiplier=int(binance.get("feed_stale_multiplier", 3)),
             websocket_renew_seconds=int(binance.get("websocket_renew_seconds", 82_800)),
+            public_dns_fallback=binance.get("public_dns_fallback", False),
         )
         settings.validate()
         return settings
 
     def validate(self) -> None:
+        if not isinstance(self.public_dns_fallback, bool):
+            raise ValueError("public_dns_fallback must be boolean")
         if self.host != "127.0.0.1" or not 1024 <= self.port <= 65535:
             raise ValueError("Dashboard must bind to localhost and a valid port")
         if self.rest_base != "https://fapi.binance.com" or self.websocket_base != "wss://fstream.binance.com/stream":

@@ -8,3 +8,12 @@ logs/
 state/
 *.log
 credentials.dpapi
+# Internal agent direction — not published
+AGENTS.md
+
+# Build outputs & runtime data
+target/
+*.sqlite3
+node_modules/
+.DS_Store
+desktop-rs/.venv/

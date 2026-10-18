@@ -1,6 +1,6 @@
 $ErrorActionPreference='Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$python = 'C:\Users\yuri\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$python = '%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 & $python -m venv (Join-Path $root '.venv')
 $venvPython = Join-Path $root '.venv\Scripts\python.exe'
 Push-Location $root
